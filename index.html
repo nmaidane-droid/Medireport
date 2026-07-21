@@ -2192,7 +2192,7 @@ function rPatients(){
   );
   // Sort alphabetically by prenom then nom
   patients.sort((a,b)=>(a.prenom+" "+a.nom).localeCompare(b.prenom+" "+b.nom,"fr"));
-  const isAdmin=["admin","medecin"].includes(u.role);
+  const isAdmin=["admin","medecin","specialiste"].includes(u.role);
 
   const rows=patients.map(p=>{
     const ref=DB.users.find(x=>x.id===p.medecin_ref);
@@ -4452,21 +4452,28 @@ function showAddRdvFromAgenda(){
 }
 
 function rUsers(){
-  const rows=DB.users.map(u=>{const rc=ROLE_CFG[u.role];const titre=u.titre?u.titre+" ":"";return `<tr><td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.prenom} ${u.nom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td><td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td><td style="font-size:13px">${u.structure||"—"}</td><td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"0000"}</span></td><td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td></tr>`;}).join("");
+  const rows=DB.users.map(u=>{const rc=ROLE_CFG[u.role];const titre=u.titre?u.titre+" ":"";return `<tr><td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.prenom} ${u.nom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td><td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td><td style="font-size:13px">${u.structure||"—"}</td><td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"0000"}</span></td><td><div class="tbl-act">${u.role==="patient"?`<button class="btn bp bsm" onclick="printFicheAcces('${u.id}')" title="Fiche d'accès patient">🖨️</button>`:""}<button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td></tr>`;}).join("");
   G("pg-users").innerHTML=`${backBtn()}<div class="sec-hd"><div><div class="sec-tit">Utilisateurs (${DB.users.length})</div></div><button class="btn bp" onclick="showAddUser()">+ Nouvel utilisateur</button></div><div style="margin-bottom:12px;padding:10px 14px;background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r);font-size:12px;color:#92400E">🔒 Les PINs sont visibles uniquement par l'administrateur. Communiquez-les aux utilisateurs en privé.</div><div class="card"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>Structure</th><th>PIN</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function showAddUser(){
   const roleOpts=Object.entries(ROLE_CFG).map(([k,v])=>`<option value="${k}">${v.i} ${v.l}</option>`).join("");
-  const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Nouvel utilisateur</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Titre</label><select id="nu-ti"><option value="">Dr.</option><option value="Pr">Pr</option><option value="M.">M.</option><option value="Mme">Mme</option></select></div><div class="fg"><label>Rôle</label><select id="nu-rl">${roleOpts}</select></div></div><div class="fr"><div class="fg"><label>Prénom</label><input id="nu-pr" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="nu-nm" placeholder="Nom"/></div></div><div class="fg"><label>Spécialité</label><select id="nu-sp"><option value="">— Sélectionner —</option>${specOptions()}</select></div><div class="fg"><label>Structure / Établissement</label><input id="nu-st" placeholder="Clinique, Cabinet, Labo..."/></div><div class="fg"><label>Adresse complète</label><input id="nu-adr" placeholder="Ex : 12 Rue Ibn Batouta, Casablanca"/></div><div class="fg"><label>Téléphone professionnel</label><input id="nu-tel" placeholder="Ex : +212 5 22 00 00 00"/></div><div class="fg"><label>PIN (6 chiffres)</label>
-  <div style="display:flex;gap:8px;align-items:center">
-    <input id="nu-pin" type="text" maxlength="6" placeholder="——————" style="letter-spacing:8px;font-size:18px;text-align:center;flex:1" readonly/>
-    <button type="button" class="btn bp bsm" onclick="const p=generatePIN();document.getElementById('nu-pin').value=p;document.getElementById('nu-pin-disp').textContent='PIN : '+p;" style="white-space:nowrap">🎲 Générer</button>
+  const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Nouvel utilisateur</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Titre</label><select id="nu-ti"><option value="">Dr.</option><option value="Pr">Pr</option><option value="M.">M.</option><option value="Mme">Mme</option></select></div><div class="fg"><label>Rôle</label><select id="nu-rl">${roleOpts}</select></div></div><div class="fr"><div class="fg"><label>Prénom</label><input id="nu-pr" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="nu-nm" placeholder="Nom"/></div></div><div class="fg"><label>Spécialité</label><select id="nu-sp"><option value="">— Sélectionner —</option>${specOptions()}</select></div><div class="fg"><label>Structure / Établissement</label><input id="nu-st" placeholder="Clinique, Cabinet, Labo..."/></div><div class="fg"><label>Adresse complète</label><input id="nu-adr" placeholder="Ex : 12 Rue Ibn Batouta, Casablanca"/></div><div class="fg"><label>Téléphone professionnel</label><input id="nu-tel" placeholder="Ex : +212 5 22 00 00 00"/></div><div class="fg"><label>Code PIN généré automatiquement</label>
+  <div style="background:#0F172A;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+    <span id="nu-pin-disp" style="font-size:28px;font-weight:900;color:#1A6EFF;font-family:monospace;letter-spacing:8px"></span>
+    <button type="button" class="btn bp bsm" onclick="const p=generatePIN();document.getElementById('nu-pin').value=p;document.getElementById('nu-pin-disp').textContent=p;" style="white-space:nowrap">🎲</button>
   </div>
-  <div id="nu-pin-disp" style="font-size:12px;color:var(--green);font-weight:700;margin-top:4px"></div>
-  <div style="font-size:11px;color:var(--g400);margin-top:3px">Communiquez ce PIN à l'utilisateur</div>
+  <input id="nu-pin" type="hidden"/>
+  <div style="font-size:11px;color:var(--g400);margin-top:6px">⚠️ Notez ce PIN — il sera affiché sur la fiche patient imprimable</div>
 </div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="nu-s">Créer</button></div></div>`);
-  ov.querySelector("#nu-s").onclick=()=>{const pr=G("nu-pr").value,nm=G("nu-nm").value;if(!pr||!nm){alert("Prénom et nom requis");return;}const rl=G("nu-rl").value,ti=G("nu-ti").value;const initials=(pr[0]+(nm[0]||"")).toUpperCase();const colors=["#1A6EFF","#E53935","#0BA896","#F59E0B","#7C3AED","#16A34A"];const color=colors[DB.users.length%colors.length];const pinVal=G("nu-pin").value.trim()||generatePIN();const newU={id:uid(),prenom:pr,nom:nm,role:rl,titre:ti||undefined,spec:G("nu-sp").value,structure:G("nu-st").value,color,initials,pin:pinVal};DB.users.push(newU);if(rl==="patient"){const pid=uid();newU.patientId=pid;DB.patients.push({id:pid,nom:nm,prenom:pr,dob:"—",age:0,sexe:"M",tel:"—",email:"—",ville:"—",groupe:"—",allergies:[],antecedents:[],pathologies:[],medecin_ref:"",userId:newU.id,color,initials});DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];}saveDB(DB);ov.remove();rUsers();};
+  // Auto-generate PIN on open
+  const autoPin=generatePIN();
+  G("nu-pin").value=autoPin;
+  G("nu-pin-disp").textContent=autoPin;
+  ov.querySelector("#nu-s").onclick=()=>{const pr=G("nu-pr").value,nm=G("nu-nm").value;if(!pr||!nm){alert("Prénom et nom requis");return;}const rl=G("nu-rl").value,ti=G("nu-ti").value;const initials=(pr[0]+(nm[0]||"")).toUpperCase();const colors=["#1A6EFF","#E53935","#0BA896","#F59E0B","#7C3AED","#16A34A"];const color=colors[DB.users.length%colors.length];const pinVal=G("nu-pin").value.trim()||generatePIN();const newU={id:uid(),prenom:pr,nom:nm,role:rl,titre:ti||undefined,spec:G("nu-sp").value,structure:G("nu-st").value,color,initials,pin:pinVal};DB.users.push(newU);if(rl==="patient"){const pid=uid();newU.patientId=pid;DB.patients.push({id:pid,nom:nm,prenom:pr,dob:"—",age:0,sexe:"M",tel:"—",email:"—",ville:"—",groupe:"—",allergies:[],antecedents:[],pathologies:[],medecin_ref:"",userId:newU.id,color,initials});DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];}saveDB(DB);ov.remove();rUsers();
+    // Si patient : proposer d'imprimer la fiche d'accès
+    if(rl==="patient"){ setTimeout(()=>{ if(confirm("Imprimer la fiche d\'accès pour "+pr+" "+nm+" ?")){printFicheAcces(newU.id);} },300); }
+  };
 }
 
 function showEditUser(uid2){
@@ -4510,15 +4517,110 @@ function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="
 <div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div><button class="btn bd" style="width:100%;justify-content:center;margin-bottom:10px" onclick="if(confirm('Réinitialiser TOUTES les données ?')){localStorage.removeItem('medirecord_db');localStorage.removeItem('medirecord_db_version');location.reload();}">🗑 Réinitialiser la base de données</button><div style="font-size:11px;color:var(--g400)">Supprime toutes les données et restaure la démo.</div></div></div></div>`;}
 
 function showAddPatient(){
-  const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouveau patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
-    <div class="fr"><div class="fg"><label>Prénom</label><input id="np-pr" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="np-nm" placeholder="Nom"/></div></div>
+  // ── Étape 1 : Recherche doublon avant création ────────────
+  const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">🔍 Rechercher un patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div>
+  <div class="mbod">
+    <div style="font-size:13px;color:var(--g500);margin-bottom:14px">Vérifiez d'abord si le patient existe déjà dans la base de données.</div>
+    <div class="fr">
+      <div class="fg"><label>CIN</label><input id="sr-cin" placeholder="Ex : AB123456" autocomplete="off"/></div>
+      <div class="fg"><label>Nom</label><input id="sr-nm" placeholder="Nom de famille" autocomplete="off"/></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Prénom</label><input id="sr-pr" placeholder="Prénom" autocomplete="off"/></div>
+      <div class="fg"><label>Date de naissance</label><input id="sr-dob" type="date"/></div>
+    </div>
+    <div id="sr-result" style="margin-top:10px"></div>
+  </div>
+  <div class="mf">
+    <button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button>
+    <button class="btn bp" id="sr-btn">Rechercher</button>
+  </div></div>`);
+
+  function doSearch(){
+    const cin=(G("sr-cin").value||"").trim().toLowerCase();
+    const nm=(G("sr-nm").value||"").trim().toLowerCase();
+    const pr=(G("sr-pr").value||"").trim().toLowerCase();
+    const dob=G("sr-dob").value;
+    const res=G("sr-result");
+
+    if(!cin&&!nm&&!pr){res.innerHTML=`<div style="color:var(--red);font-size:13px">Saisissez au moins un critère de recherche.</div>`;return;}
+
+    // Search in DB
+    const matches=DB.patients.filter(p=>{
+      const byCin=cin&&(p.cin||"").toLowerCase()===cin;
+      const byNm=nm&&(p.nom||"").toLowerCase().includes(nm);
+      const byPr=pr&&(p.prenom||"").toLowerCase().includes(pr);
+      const byDob=dob&&p.dob&&p.dob===new Date(dob).toLocaleDateString("fr-FR");
+      if(cin) return byCin;
+      if(nm&&pr) return byNm&&byPr;
+      if(nm) return byNm;
+      if(pr) return byPr;
+      if(dob) return byDob;
+      return false;
+    });
+
+    if(matches.length===0){
+      // Not found → offer to create
+      res.innerHTML=`<div style="background:var(--green-l);border:1px solid #86EFAC;border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ Aucun dossier existant trouvé</div>
+        <div style="font-size:12px;color:var(--g600);margin-bottom:12px">Ce patient n'est pas encore dans la base. Vous pouvez créer son dossier.</div>
+        <button class="btn bp" style="width:100%" onclick="ov.remove();showCreatePatientForm('${(G("sr-pr").value||"").trim()}','${(G("sr-nm").value||"").trim()}','${G("sr-dob").value||""}','${(G("sr-cin").value||"").trim()}')">+ Créer le dossier patient</button>
+      </div>`;
+    } else {
+      // Found → show matches
+      const html=matches.map(p=>{
+        const hasAccess=DB.access.some(a=>a.patientId===p.id&&a.userId===currentUser.id)||p.medecin_ref===currentUser.id;
+        const isPending=(DB.demandes_acces||[]).some(d=>d.patient_id===p.id&&d.demandeur_id===currentUser.id&&d.statut==="en_attente");
+        return `<div style="background:#fff;border:1.5px solid var(--g200);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+          <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:14px">${p.prenom} ${p.nom}</div>
+            <div style="font-size:12px;color:var(--g500)">${p.dob||"—"} · ${p.cin||"CIN non renseigné"} · ${p.ville||"—"}</div>
+          </div>
+          ${hasAccess
+            ?`<button class="btn bp bsm" onclick="ov.remove();openDossier('${p.id}')">Ouvrir →</button>`
+            :isPending
+              ?`<span class="badge ba">⏳ En attente</span>`
+              :`<button class="btn bs bsm" onclick="demanderAcces('${p.id}',ov)">Demander accès</button>`
+          }
+        </div>`;
+      }).join("");
+      res.innerHTML=`<div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:8px">${matches.length} dossier(s) trouvé(s) :</div>${html}
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--g400)">Ce n'est pas le bon patient ? <a href="#" style="color:var(--blue)" onclick="event.preventDefault();showCreatePatientForm('${(G("sr-pr").value||"").trim()}','${(G("sr-nm").value||"").trim()}','${G("sr-dob").value||""}','${(G("sr-cin").value||"").trim()}')">Créer un nouveau dossier</a></div>`;
+    }
+  }
+
+  G("sr-btn").onclick=doSearch;
+  ["sr-cin","sr-nm","sr-pr"].forEach(id=>G(id)&&G(id).addEventListener("keydown",e=>e.key==="Enter"&&doSearch()));
+}
+
+async function demanderAcces(patientId, ov){
+  const p=DB.patients.find(x=>x.id===patientId);
+  if(!p)return;
+  const demande={id:uid(),patient_id:patientId,demandeur_id:currentUser.id,statut:"en_attente",date:today(),motif:currentUser.spec||currentUser.role};
+  // Save to Supabase
+  try{
+    await supaFetch("demandes_acces?on_conflict=id",{method:"POST",prefer:"resolution=merge-duplicates,return=minimal",body:JSON.stringify([demande])});
+    if(!DB.demandes_acces)DB.demandes_acces=[];
+    DB.demandes_acces.push(demande);
+    saveDB(DB);
+    if(ov)ov.remove();
+    alert("✅ Demande envoyée à "+p.prenom+" "+p.nom+".\nLe patient doit valider l\'accès depuis son application mobile.");
+  }catch(e){
+    alert("Erreur lors de l\'envoi de la demande.");
+  }
+}
+
+function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
+  const ov2=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouveau dossier patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div class="fr"><div class="fg"><label>Prénom</label><input id="np-pr" value="${prePr}" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="np-nm" value="${preNm}" placeholder="Nom"/></div></div>
     <div class="fr3">
-      <div class="fg"><label>Date de naissance</label><input id="np-dob" type="date"/></div>
+      <div class="fg"><label>Date de naissance</label><input id="np-dob" type="date" value="${preDob}"/></div>
       <div class="fg"><label>Sexe</label><select id="np-sx"><option value="M">Homme</option><option value="F">Femme</option></select></div>
       <div class="fg"><label>Groupe sanguin</label><select id="np-gr"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
     </div>
     <div class="fr">
-      <div class="fg"><label>CIN</label><input id="np-cin" placeholder="Ex : AB123456"/></div>
+      <div class="fg"><label>CIN</label><input id="np-cin" value="${preCin}" placeholder="Ex : AB123456"/></div>
       <div class="fg"><label>Lieu de naissance</label><input id="np-lieu" placeholder="Ex : Casablanca"/></div>
     </div>
     <div class="fr"><div class="fg"><label>Téléphone</label><input id="np-tel" placeholder="+212 6 00 00 00 00"/></div><div class="fg"><label>Ville de résidence</label><input id="np-vl" placeholder="Casablanca"/></div></div>
@@ -4531,11 +4633,10 @@ function showAddPatient(){
   const npDrSd=new SearchableDropdown("np-dr-sd",userOptions("medecin"),null,"Rechercher un médecin référent...");
   if(currentUser.role==="medecin") npDrSd.setValue(currentUser.id);
 
-  ov.querySelector("#np-s").onclick=()=>{
+  ov2.querySelector("#np-s").onclick=()=>{
     const pr=document.getElementById("np-pr").value.trim();
     const nm=document.getElementById("np-nm").value.trim();
     if(!pr||!nm){alert("Prénom et nom requis");return;}
-    // Show consent modal before creating patient
     showConsentModal(pr, nm, ()=>{
     const initials=(pr[0]+(nm[0]||"")).toUpperCase();
     const colors=["#16A34A","#1A6EFF","#E53935","#F59E0B","#7C3AED","#0BA896"];
@@ -4548,6 +4649,16 @@ function showAddPatient(){
     const ant=(document.getElementById("np-ant").value||"").split(",").map(x=>x.trim()).filter(Boolean);
     const alg=(document.getElementById("np-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);
     const drId=npDrSd.getValue();
+    const grp=document.getElementById("np-gr").value;
+
+    // ── Créer compte utilisateur patient ──
+    const newPin=generatePIN();
+    const newLogin=(pr[0]+"."+nm).toLowerCase().replace(/[^a-z0-9.]/g,"");
+    const newUserId=uid();
+    const newUser={id:newUserId,prenom:pr,nom:nm,role:"patient",spec:"",structure:"",color,initials,pin:newPin,login:newLogin,patientId:pid};
+    DB.users.push(newUser);
+
+    // ── Créer dossier patient ──
     DB.patients.push({
       id:pid, nom:nm, prenom:pr, dob, age,
       sexe:document.getElementById("np-sx").value,
@@ -4557,20 +4668,26 @@ function showAddPatient(){
       cin:document.getElementById("np-cin").value||"",
       lieu_naissance:document.getElementById("np-lieu").value||"",
       adresse:document.getElementById("np-adr")?.value||"",
-      groupe:document.getElementById("np-gr").value,
+      groupe:grp,
       allergies:alg, antecedents:ant, pathologies:[],
-      medecin_ref:drId, color, initials,
-      consentement:{
-        date: today(),
-        medecin: currentUser.id,
-        accorde: true,
-        version: "v1.0"
-      }
+      medecin_ref:drId||currentUser.id, color, initials,
+      userId:newUserId,
+      consentement:{date:today(),medecin:currentUser.id,accorde:true,version:"v1.0"}
     });
     DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];
-    if(drId) DB.access.push({id:uid(),patientId:pid,userId:drId,type:"medecin_ref",date:today(),modules:["all"]});
-    saveDB(DB);ov.remove();
-      if(currentPage==="admin")rAdmin();else rPatients();
+
+    // ── Accès automatique : créateur + médecin référent ──
+    DB.access.push({id:uid(),patientId:pid,userId:currentUser.id,type:"createur",date:today(),modules:["all"]});
+    if(drId&&drId!==currentUser.id) DB.access.push({id:uid(),patientId:pid,userId:drId,type:"medecin_ref",date:today(),modules:["all"]});
+
+    saveDB(DB);ov2.remove();
+    if(currentPage==="admin")rAdmin();else rPatients();
+
+    // ── Proposer fiche d'accès immédiatement ──
+    setTimeout(()=>{
+      if(confirm("Imprimer la fiche d\'accès pour "+pr+" "+nm+" ?"))
+        printFicheAccesFromData(pid,pr,nm,newLogin,newPin,dob,grp);
+    },300);
     });
   };
 }
@@ -5600,6 +5717,223 @@ document.addEventListener("keydown",(e)=>{
   if(e.ctrlKey&&e.key==="p"){ e.preventDefault(); goPage("patients"); }
 });
 
+
+// ── FICHE D'ACCÈS PATIENT ─────────────────────────────────
+function printFicheAcces(userId){
+  const u = DB.users.find(x=>x.id===userId);
+  if(!u||u.role!=="patient"){ alert("Utilisateur patient introuvable"); return; }
+  const p = DB.patients.find(x=>x.id===u.patientId);
+  const nom = `${u.prenom} ${u.nom}`;
+  const login = u.login || userId;
+  const pin = u.pin || "000000";
+  const url = "https://medireport-kappa.vercel.app/mobile.html";
+
+  // QR code generator (same as qr-patient.html)
+  function makeQR(text, size){
+    const c = document.createElement("canvas");
+    c.width=size; c.height=size;
+    // Inline minimal QR for this URL
+    // We'll use the same pure-JS engine
+    generateQRToCanvas(text, c);
+    return c.toDataURL("image/png");
+  }
+
+  const qrData = makeQR(url, 200);
+  const dob = p ? (p.dob||"—") : "—";
+  const groupe = p ? (p.groupe||"—") : "—";
+
+  const win = window.open("","_blank","width=500,height=700");
+  win.document.write(`<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"/>
+<title>Fiche accès — ${nom}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;padding:30px;color:#0F172A}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #E2E8F0}
+.logo-box{width:42px;height:42px;border-radius:10px;border:2px solid #e2e8f0;padding:3px;overflow:hidden;flex-shrink:0}
+.logo-title{font-size:18px;font-weight:900;color:#0F172A}
+.logo-title span{color:#1A6EFF}
+.logo-sub{font-size:11px;color:#64748B}
+h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#EAF1FF;padding:10px 14px;border-radius:8px;border-left:4px solid #1A6EFF}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.info-box{background:#F8FAFC;border-radius:8px;padding:10px 14px;border:1px solid #E2E8F0}
+.info-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.info-val{font-size:14px;font-weight:700;color:#0F172A}
+.cred-box{background:#0F172A;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:20px;align-items:center}
+.cred-left{flex:1}
+.cred-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.cred-val{font-size:16px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:2px}
+.pin-val{font-size:24px;font-weight:900;color:#1A6EFF;font-family:monospace;letter-spacing:6px}
+.qr-wrap{text-align:center;margin-bottom:20px}
+.qr-wrap img{width:160px;height:160px;border:3px solid #E2E8F0;border-radius:10px;padding:4px}
+.qr-url{font-size:10px;color:#94A3B8;margin-top:6px}
+.steps{margin-bottom:20px}
+.step{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px;color:#334155}
+.step-num{width:18px;height:18px;border-radius:50%;background:#1A6EFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
+.warning{background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400E;margin-bottom:20px}
+.footer{font-size:10px;color:#94A3B8;text-align:center;border-top:1px solid #F1F5F9;padding-top:14px}
+@media print{body{padding:20px}}
+</style></head><body>
+<div class="header">
+  <div class="logo-box">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <rect width="100" height="100" rx="20" fill="white"/>
+      <polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div><div class="logo-title">Medi<span>Report</span></div><div class="logo-sub">Fiche d'accès patient — Confidentiel</div></div>
+</div>
+
+<h2>👤 ${nom}</h2>
+
+<div class="info-grid">
+  <div class="info-box"><div class="info-label">Date de naissance</div><div class="info-val">${dob}</div></div>
+  <div class="info-box"><div class="info-label">Groupe sanguin</div><div class="info-val">${groupe}</div></div>
+</div>
+
+<div class="cred-box">
+  <div class="cred-left">
+    <div class="cred-label">Identifiant</div>
+    <div class="cred-val">${login}</div>
+    <div class="cred-label" style="margin-top:14px">Code PIN</div>
+    <div class="pin-val">${pin}</div>
+  </div>
+  <div class="qr-wrap">
+    <img src="${qrData}" alt="QR Code"/>
+    <div class="qr-url">Scannez pour accéder</div>
+  </div>
+</div>
+
+<div class="warning">⚠️ Document confidentiel — Ne pas laisser sans surveillance. Votre code PIN est personnel et ne doit être communiqué à personne.</div>
+
+<div class="steps">
+  <div class="step"><div class="step-num">1</div><div>Scannez le QR code ou rendez-vous sur <strong>medireport-kappa.vercel.app/mobile.html</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div>Installez l'app : Menu ⋮ → "Ajouter à l'écran d'accueil" (Android) ou Partager ⎙ → "Sur l'écran d'accueil" (iPhone)</div></div>
+  <div class="step"><div class="step-num">3</div><div>Saisissez votre identifiant et code PIN pour accéder à votre dossier</div></div>
+</div>
+
+<div class="footer">🔒 Données protégées — CNDP Maroc • MediReport © ${new Date().getFullYear()}</div>
+
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`);
+  win.document.close();
+}
+
+// ── QR Generator for fiche (same pure-JS engine) ──────────
+function generateQRToCanvas(url, canvas){
+  try {
+    const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+    let x2=1;for(let i=0;i<255;i++){EXP[i]=x2;LOG[x2]=i;x2<<=1;if(x2&256)x2^=285;}for(let i=255;i<512;i++)EXP[i]=EXP[i-255];
+    const gm=(a,b)=>a&&b?EXP[(LOG[a]+LOG[b])%255]:0;
+    function rsPoly(deg){let p=[1];for(let i=0;i<deg;i++){const r=new Array(p.length+1).fill(0);for(let j=0;j<p.length;j++){r[j]^=p[j];r[j+1]^=gm(p[j],EXP[i]);}p=r;}return p;}
+    function rsEnc(data,ns){const gen=rsPoly(ns),msg=[...data,...new Array(ns).fill(0)];for(let i=0;i<data.length;i++){const c=msg[i];if(c)for(let j=1;j<gen.length;j++)msg[i+j]^=gm(gen[j],c);}return msg.slice(data.length);}
+    function encodeBytes(str,totalBits){const bytes=[...str].map(c=>c.charCodeAt(0));const bits=[];const push=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1);};push(4,4);push(bytes.length,8);bytes.forEach(b=>push(b,8));for(let i=0;i<4&&bits.length<totalBits;i++)bits.push(0);while(bits.length%8)bits.push(0);const pads=[0xEC,0x11];let pi=0;while(bits.length<totalBits){push(pads[pi++%2],8);}const cw=[];for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}return cw;}
+    const SIZE=37,ECPB=18,G1D=15,G2D=16;
+    const allData=encodeBytes(url,62*8);
+    const blocks=[allData.slice(0,G1D),allData.slice(G1D,G1D*2),allData.slice(G1D*2,G1D*2+G2D),allData.slice(G1D*2+G2D)];
+    const ecBlocks=blocks.map(b=>rsEnc(b,ECPB));
+    const finalCW=[];
+    for(let i=0;i<G2D;i++)blocks.forEach(b=>{if(i<b.length)finalCW.push(b[i]);});
+    for(let i=0;i<ECPB;i++)ecBlocks.forEach(b=>finalCW.push(b[i]));
+    const dataBits=[];finalCW.forEach(cw=>{for(let i=7;i>=0;i--)dataBits.push((cw>>i)&1);});for(let i=0;i<7;i++)dataBits.push(0);
+    const mat=Array.from({length:SIZE},()=>new Array(SIZE).fill(-1));
+    const func=Array.from({length:SIZE},()=>new Array(SIZE).fill(false));
+    function setFn(r,c,v){if(r>=0&&r<SIZE&&c>=0&&c<SIZE){mat[r][c]=v?1:0;func[r][c]=true;}}
+    function finder(r,c){for(let dr=-1;dr<=7;dr++)for(let dc=-1;dc<=7;dc++){if(r+dr<0||r+dr>=SIZE||c+dc<0||c+dc>=SIZE)continue;const onBorder=dr===0||dr===6||dc===0||dc===6;const inner=dr>=2&&dr<=4&&dc>=2&&dc<=4;const inPat=dr>=0&&dr<=6&&dc>=0&&dc<=6;setFn(r+dr,c+dc,inPat&&(onBorder||inner));}}
+    finder(0,0);finder(0,SIZE-7);finder(SIZE-7,0);
+    function align(r,c){for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++)setFn(r+dr,c+dc,(Math.abs(dr)===2||Math.abs(dc)===2||(!dr&&!dc)));}
+    align(28,28);
+    for(let i=8;i<SIZE-8;i++){setFn(6,i,i%2===0);setFn(i,6,i%2===0);}
+    setFn(4*5+9,8,true);
+    const fmtPos1=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];
+    const fmtPos2=[[SIZE-1,8],[SIZE-2,8],[SIZE-3,8],[SIZE-4,8],[SIZE-5,8],[SIZE-6,8],[SIZE-7,8],[8,SIZE-8],[8,SIZE-7],[8,SIZE-6],[8,SIZE-5],[8,SIZE-4],[8,SIZE-3],[8,SIZE-2],[8,SIZE-1]];
+    [...fmtPos1,...fmtPos2].forEach(([r,c])=>{func[r][c]=true;mat[r][c]=0;});
+    let bitIdx=0,goUp=true;
+    for(let right=SIZE-1;right>=1;right-=2){if(right===6)right=5;for(let cnt=0;cnt<SIZE;cnt++){const r=goUp?SIZE-1-cnt:cnt;for(let lr=0;lr<2;lr++){const c=right-lr;if(!func[r][c]){mat[r][c]=bitIdx<dataBits.length?dataBits[bitIdx++]:0;}}}goUp=!goUp;}
+    function applyMask(m){for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){if(!func[r][c]){let f=false;if(m===0)f=(r+c)%2===0;else if(m===1)f=r%2===0;else if(m===2)f=c%3===0;else if(m===3)f=(r+c)%3===0;else if(m===4)f=(Math.floor(r/2)+Math.floor(c/3))%2===0;else if(m===5)f=(r*c)%2+(r*c)%3===0;else if(m===6)f=((r*c)%2+(r*c)%3)%2===0;else if(m===7)f=((r+c)%2+(r*c)%3)%2===0;if(f)mat[r][c]^=1;}}}
+    function penalty(){let p=0;for(let r=0;r<SIZE;r++){let cnt=1;for(let c=1;c<SIZE;c++){if(mat[r][c]===mat[r][c-1])cnt++;else{if(cnt>=5)p+=cnt-2;cnt=1;}}if(cnt>=5)p+=cnt-2;}return p;}
+    const saved=mat.map(r=>[...r]);
+    let bm=0,bp=Infinity;
+    for(let m=0;m<8;m++){for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)mat[r][c]=saved[r][c];applyMask(m);const pen=penalty();if(pen<bp){bp=pen;bm=m;}}
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)mat[r][c]=saved[r][c];
+    applyMask(bm);
+    function fmtBCH(d){let v=d<<10;for(let i=4;i>=0;i--){if(v&(1<<(i+10)))v^=(0x537<<i);}return ((d<<10)|v)^0x5412;}
+    const fmt=fmtBCH((0b00<<3)|bm);
+    fmtPos1.forEach(([r,c],i)=>mat[r][c]=(fmt>>(14-i))&1);
+    fmtPos2.forEach(([r,c],i)=>mat[r][c]=(fmt>>i)&1);
+    mat[4*5+9][8]=1;
+    const S=SIZE,M=4,Q=4,cs=(S+Q*2)*M;
+    canvas.width=cs;canvas.height=cs;
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,cs,cs);
+    ctx.fillStyle="#000";
+    for(let r=0;r<S;r++)for(let c=0;c<S;c++)if(mat[r][c]===1)ctx.fillRect((c+Q)*M,(r+Q)*M,M,M);
+  } catch(e){ console.error("QR error:",e); }
+}
+
+
+// ── FICHE D'ACCÈS depuis données directes (nouveau patient) ──
+function printFicheAccesFromData(pid, prenom, nom, login, pin, dob, groupe){
+  const url = "https://medireport-kappa.vercel.app/mobile.html";
+  const qrData = (()=>{ const c=document.createElement("canvas"); generateQRToCanvas(url,c); return c.toDataURL("image/png"); })();
+  const win=window.open("","_blank","width=500,height=700");
+  win.document.write(`<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"/>
+<title>Fiche accès — ${prenom} ${nom}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;padding:30px;color:#0F172A}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #E2E8F0}
+.logo-box{width:42px;height:42px;border-radius:10px;border:2px solid #e2e8f0;padding:3px;overflow:hidden;flex-shrink:0}
+.logo-title{font-size:18px;font-weight:900;color:#0F172A}.logo-title span{color:#1A6EFF}
+.logo-sub{font-size:11px;color:#64748B}
+h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#EAF1FF;padding:10px 14px;border-radius:8px;border-left:4px solid #1A6EFF}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.info-box{background:#F8FAFC;border-radius:8px;padding:10px 14px;border:1px solid #E2E8F0}
+.info-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.info-val{font-size:14px;font-weight:700;color:#0F172A}
+.cred-box{background:#0F172A;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:20px;align-items:center}
+.cred-left{flex:1}
+.cred-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.cred-val{font-size:16px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:2px}
+.pin-val{font-size:24px;font-weight:900;color:#1A6EFF;font-family:monospace;letter-spacing:6px}
+.qr-wrap{text-align:center}
+.qr-wrap img{width:130px;height:130px;border:3px solid rgba(255,255,255,.2);border-radius:10px;padding:4px;background:#fff}
+.qr-url{font-size:9px;color:#94A3B8;margin-top:4px}
+.steps{margin-bottom:20px}
+.step{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px;color:#334155}
+.step-num{width:18px;height:18px;border-radius:50%;background:#1A6EFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
+.warning{background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400E;margin-bottom:20px}
+.footer{font-size:10px;color:#94A3B8;text-align:center;border-top:1px solid #F1F5F9;padding-top:14px}
+@media print{body{padding:20px}}
+</style></head><body>
+<div class="header">
+  <div class="logo-box"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="20" fill="white"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div><div class="logo-title">Medi<span>Report</span></div><div class="logo-sub">Fiche d'accès patient — Confidentiel</div></div>
+</div>
+<h2>👤 ${prenom} ${nom}</h2>
+<div class="info-grid">
+  <div class="info-box"><div class="info-label">Date de naissance</div><div class="info-val">${dob||"—"}</div></div>
+  <div class="info-box"><div class="info-label">Groupe sanguin</div><div class="info-val">${groupe||"—"}</div></div>
+</div>
+<div class="cred-box">
+  <div class="cred-left">
+    <div class="cred-label">Identifiant</div><div class="cred-val">${login}</div>
+    <div class="cred-label" style="margin-top:14px">Code PIN</div><div class="pin-val">${pin}</div>
+  </div>
+  <div class="qr-wrap"><img src="${qrData}" alt="QR Code"/><div class="qr-url">Scannez pour accéder</div></div>
+</div>
+<div class="warning">⚠️ Document confidentiel — Ne communiquez votre PIN à personne.</div>
+<div class="steps">
+  <div class="step"><div class="step-num">1</div><div>Scannez le QR code ou allez sur <strong>medireport-kappa.vercel.app/mobile.html</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div><strong>Android :</strong> Menu ⋮ → "Ajouter à l'écran d'accueil" · <strong>iPhone :</strong> Partager ⎙ → "Sur l'écran d'accueil"</div></div>
+  <div class="step"><div class="step-num">3</div><div>Connectez-vous avec votre identifiant et code PIN</div></div>
+</div>
+<div class="footer">🔒 Données protégées — CNDP Maroc • MediReport © ${new Date().getFullYear()}</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`);
+  win.document.close();
+}
 </script>
 </body>
 </html>
