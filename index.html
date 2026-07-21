@@ -1164,15 +1164,19 @@ function canAccessPatient(userId, patientId){
 function getAccessiblePatients(userId){
   const u = DB.users.find(x=>x.id===userId);
   if(!u) return [];
-  if(u.role==="admin") return DB.patients;
-  if(u.role==="patient"){ return DB.patients.filter(p=>p.userId===userId); }
+  // Admin, médecin, spécialiste : accès à tous les patients
+  if(["admin","medecin","specialiste"].includes(u.role)) return DB.patients;
+  // Patient : uniquement son propre dossier
+  if(u.role==="patient") return DB.patients.filter(p=>p.userId===userId||p.id===u.patientId);
+  // Labo, imagerie, pharmacie : uniquement via accès explicite
   const ids = new Set(DB.access.filter(a=>a.userId===userId).map(a=>a.patientId));
   return DB.patients.filter(p=>ids.has(p.id));
 }
 function canAccessModule(userId, patientId, module){
   const u = DB.users.find(x=>x.id===userId);
   if(!u) return false;
-  if(u.role==="admin") return true;
+  // Admin, médecin, spécialiste : accès complet
+  if(["admin","medecin","specialiste"].includes(u.role)) return true;
   if(u.patientId===patientId) return true;
   const acc = DB.access.find(a=>a.patientId===patientId && a.userId===userId);
   if(!acc) return false;
