@@ -2517,6 +2517,7 @@ function dConsultations(){
 //  DEMANDE LABO
 // ══════════════════════════════════════════════════════════
 const BILANS_LABO = [
+  {cat:"🅰 Groupage sanguin",     analyses:["Groupage ABO-Rhésus","RAI (Recherche Agglutinines Irrégulières)","Phénotype érythrocytaire étendu"]},
   {cat:"🩸 Hématologie",         analyses:["NFS","VS","CRP","Fibrinogène","TP / INR","TCA","Réticulocytes","Frottis sanguin"]},
   {cat:"🫀 Bilan cardiaque",      analyses:["Troponine","BNP / NT-proBNP","LDH","CPK","CPK-MB","D-Dimères","Myoglobine"]},
   {cat:"🍬 Bilan métabolique",    analyses:["Glycémie","HbA1c","Insuline","Fructosamine","Peptide C"]},
@@ -2603,6 +2604,20 @@ function showSaisieResultats(demandeId){
     })).filter(r=>r.v);
 
     if(!res.length){ alert("Saisissez au moins un résultat."); return; }
+
+    // ── Groupage ABO-Rhésus : mise à jour automatique du dossier patient ──
+    const groupageRes = res.find(r=>r.p==="Groupage ABO-Rhésus" && r.v);
+    if(groupageRes){
+      const pat = DB.patients.find(x=>x.id===d.patientId);
+      if(pat){
+        const raw = groupageRes.v.trim().toUpperCase()
+          .replace(/POSITIF|POSITIVE/,"POS").replace(/NEGATIF|NEGATIVE/,"NEG")
+          .replace(/POS/,"+").replace(/NEG/,"-")
+          .replace(/\s+/g,"");
+        const m = raw.match(/^(A|B|AB|O)([+\-])/);
+        if(m){ pat.groupe = m[1]+m[2]; console.log("Groupe mis à jour:", pat.groupe); }
+      }
+    }
 
     // Add to patient labo
     if(!DB.labos[d.patientId]) DB.labos[d.patientId]=[];
