@@ -229,7 +229,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .upick-empty{padding:30px;text-align:center;color:var(--g400);font-size:13px}
 
 /* Login */
-#ls{align-items:center;justify-content:center;background:linear-gradient(135deg,#f0f4f8 0%,#e8edf5 100%);padding:40px 20px;overflow-y:auto;flex-direction:column;gap:32px}
+#ls{align-items:center;justify-content:center;background:linear-gradient(135deg,#f0f4f8 0%,#e8edf5 100%);padding:40px 20px;overflow-y:hidden;flex-direction:column;gap:32px}
 .ls-logo{display:flex;align-items:center;gap:16px}
 .ls-ico{width:64px;height:64px;border-radius:18px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;box-shadow:0 6px 20px rgba(26,110,255,.4)}
 .ls-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:16px;width:100%;max-width:900px}
@@ -1218,6 +1218,8 @@ function closeLoginModal(){
 }
 
 function lsPin(k){
+  // Fermer le clavier virtuel quand on utilise le pavé PIN
+  document.getElementById("ls-login-inp")?.blur();
   if(k==="del"){
     lsPinEntry=lsPinEntry.slice(0,-1);
   } else {
