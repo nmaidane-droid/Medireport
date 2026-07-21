@@ -279,8 +279,15 @@ async function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
+  // Afficher chargement
+  err.style.color = "var(--blue)";
+  err.textContent = "⏳ Connexion en cours…";
+
   // Charger depuis Supabase ou localStorage en fallback
   DB = await loadDBFromSupabase();
+
+  err.textContent = "";
+  err.style.color = "";
 
   var user = null;
   for (var i=0; i<DB.users.length; i++) {
@@ -289,11 +296,13 @@ async function login() {
   if (!user) { err.textContent = "Identifiant non reconnu"; flash(); return; }
   if (pin !== (user.pin || "000000")) { err.textContent = "Code PIN incorrect"; flash(); return; }
 
+  // patientId peut venir de Supabase (patient_id) ou localStorage (patientId)
+  var pid = user.patientId || user.patient_id;
   var pat = null;
   for (var j=0; j<DB.patients.length; j++) {
-    if (DB.patients[j].id === user.patientId) { pat = DB.patients[j]; break; }
+    if (DB.patients[j].id === pid) { pat = DB.patients[j]; break; }
   }
-  if (!pat) { err.textContent = "Dossier introuvable"; return; }
+  if (!pat) { err.textContent = "Dossier introuvable (id: "+pid+")"; return; }
 
   USR = user; PAT = pat; pin = "";
   document.getElementById("ls").style.display = "none";
