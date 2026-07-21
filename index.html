@@ -974,7 +974,150 @@ function loadDBLocal(){
 }
 
 function saveDB(db){
+  // Cache local
   try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
+  // Sync Supabase en arrière-plan
+  syncToSupabase(db);
+}
+
+async function syncToSupabase(db){
+  try {
+    // ── Helpers ──────────────────────────────────────────
+    async function upsert(table, data){
+      if(!data||!data.length) return;
+      return supaFetch(table + "?on_conflict=id", {
+        method:"POST",
+        prefer:"resolution=merge-duplicates,return=minimal",
+        body: JSON.stringify(data)
+      });
+    }
+    async function upsertNoId(table, data, conflict){
+      if(!data||!data.length) return;
+      return supaFetch(table + "?on_conflict=" + conflict, {
+        method:"POST",
+        prefer:"resolution=merge-duplicates,return=minimal",
+        body: JSON.stringify(data)
+      });
+    }
+
+    // ── Users ─────────────────────────────────────────────
+    const usersToSync = (db.users||[]).map(u=>({
+      id:u.id, nom:u.nom, prenom:u.prenom||"", role:u.role,
+      titre:u.titre||null, spec:u.spec||null, structure:u.structure||null,
+      adresse:u.adresse||null, tel_pro:u.tel_pro||null, ville:u.ville||null,
+      email:u.email||null, color:u.color||"#1A6EFF", initials:u.initials||null,
+      pin:u.pin||"000000", login:u.login, patient_id:u.patientId||null
+    }));
+    await upsert("users", usersToSync);
+
+    // ── Patients ──────────────────────────────────────────
+    const patsToSync = (db.patients||[]).map(p=>({
+      id:p.id, nom:p.nom, prenom:p.prenom, dob:p.dob||null, age:p.age||null,
+      sexe:p.sexe||null, groupe:p.groupe||null, cin:p.cin||null,
+      lieu_naissance:p.lieu_naissance||null, adresse:p.adresse||null,
+      ville:p.ville||null, tel:p.tel||null, email:p.email||null,
+      allergies:p.allergies||[], antecedents:p.antecedents||[],
+      pathologies:p.pathologies||[], medecin_ref:p.medecin_ref||null,
+      color:p.color||"#1A6EFF", initials:p.initials||null,
+      dialyse:p.dialyse||false, seances_semaine:p.seances_semaine||null,
+      type_acces:p.type_acces||null, consentement:p.consentement||null,
+      user_id:p.userId||p.user_id||null
+    }));
+    await upsert("patients", patsToSync);
+
+    // ── Patient Access ────────────────────────────────────
+    const accessToSync = (db.access||[]).map(a=>({
+      patient_id:a.patientId||a.patient_id,
+      user_id:a.userId||a.user_id,
+      type:a.type||"suivi", modules:a.modules||["all"],
+      motif:a.motif||null, date:a.date||null
+    }));
+    await upsertNoId("patient_access", accessToSync, "patient_id,user_id");
+
+    // ── Consultations ─────────────────────────────────────
+    const cons = [];
+    Object.entries(db.consultations||{}).forEach(([pid, arr])=>{
+      (arr||[]).forEach(c=>cons.push({
+        id:c.id, patient_id:pid, date:c.date||null, dr:c.dr||null,
+        spec:c.spec||null, motif:c.motif||null, cr:c.cr||null,
+        tags:c.tags||[], statut:c.statut||null, sc:c.sc||null
+      }));
+    });
+    await upsert("consultations", cons);
+
+    // ── Labos ─────────────────────────────────────────────
+    const labs = [];
+    Object.entries(db.labos||{}).forEach(([pid, arr])=>{
+      (arr||[]).forEach(l=>labs.push({
+        id:l.id, patient_id:pid, date:l.date||null,
+        labo:typeof l.labo==="string"?l.labo:null,
+        ref:l.ref||null, commentaire:l.commentaire||null,
+        resultats:l.res||l.resultats||[]
+      }));
+    });
+    await upsert("labos", labs);
+
+    // ── RDV ───────────────────────────────────────────────
+    const rdvToSync = (db.rdv||[]).map(r=>({
+      id:r.id, patient_id:r.patientId||r.patient_id,
+      day:r.day||null, mo:r.mo||null, h:r.h||null,
+      dr:r.dr||null, spec:r.spec||null, lieu:r.lieu||null,
+      motif:r.motif||null, statut:r.s||r.statut||"à confirmer",
+      color:r.c||r.color||null
+    }));
+    await upsert("rdv", rdvToSync);
+
+    // ── Prescriptions ─────────────────────────────────────
+    const rxList = [];
+    Object.entries(db.rx||{}).forEach(([pid, arr])=>{
+      (arr||[]).forEach(rx=>rxList.push({
+        id:rx.id, patient_id:pid, med:rx.med||null, dos:rx.dos||null,
+        pos:rx.pos||null, ind:rx.ind||null, dr:rx.dr||null,
+        date:rx.date||null, statut:rx.s||rx.statut||"active",
+        renouvellement:rx.ren||rx.renouvellement||null,
+        ordonnance:rx.ord||rx.ordonnance||null
+      }));
+    });
+    await upsert("prescriptions", rxList);
+
+    // ── Imagerie ──────────────────────────────────────────
+    const imgList = [];
+    Object.entries(db.imagerie||{}).forEach(([pid, arr])=>{
+      (arr||[]).forEach(img=>imgList.push({
+        id:img.id, patient_id:pid, date:img.date||null,
+        type:img.type||null,
+        centre:typeof img.centre==="string"?img.centre:null,
+        dr_demandeur:img.dr_demandeur||img.presc||null,
+        indication:img.indication||null, resultat:img.res||img.resultat||null,
+        conclusion:img.conclusion||img.cr||null
+      }));
+    });
+    await upsert("imagerie", imgList);
+
+    // ── Demandes labo ─────────────────────────────────────
+    const demLaboToSync = (db.demandes_labo||[]).map(d=>({
+      id:d.id, patient_id:d.patientId||d.patient_id,
+      medecin:d.medecin||null, labo:d.labo||null,
+      date:d.date||null, date_traitement:d.date_traitement||null,
+      analyses:d.analyses||[], statut:d.statut||"en_attente",
+      ref:d.ref||null, resultats:d.resultats||[]
+    }));
+    await upsert("demandes_labo", demLaboToSync);
+
+    // ── Demandes avis ─────────────────────────────────────
+    const demAvisToSync = (db.demandes_avis||[]).map(d=>({
+      id:d.id, patient_id:d.patientId||d.patient_id,
+      medecin:d.medecin||null, specialiste:d.specialiste||null,
+      specialite:d.specialite||null, date:d.date||null,
+      date_traitement:d.date_traitement||null, motif:d.motif||null,
+      statut:d.statut||"en_attente", avis:d.avis||null
+    }));
+    await upsert("demandes_avis", demAvisToSync);
+
+    console.log("[MediReport] Sync Supabase OK");
+  } catch(err){
+    console.warn("[MediReport] Sync Supabase failed:", err);
+  }
 }
 
 let DB = loadDBLocal();
