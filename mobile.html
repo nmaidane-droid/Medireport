@@ -272,18 +272,23 @@ function upd() {
   }
 }
 
-async function login() {
+function login() {
   var id = document.getElementById("uid").value.trim().toLowerCase();
   var err = document.getElementById("perr");
   err.textContent = "";
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  // Afficher chargement
+  // Afficher le chargement AVANT l'async, avec requestAnimationFrame pour forcer le rendu
   err.style.color = "var(--blue)";
   err.textContent = "⏳ Connexion en cours…";
 
-  // Charger depuis Supabase ou localStorage en fallback
+  // Laisser le navigateur rendre le message avant de lancer l'async
+  setTimeout(function() { loginAsync(id, err); }, 50);
+}
+
+async function loginAsync(id, err) {
+  // Charger depuis Supabase ou fallback localStorage
   DB = await loadDBFromSupabase();
 
   err.textContent = "";
@@ -305,6 +310,7 @@ async function login() {
   if (!pat) { err.textContent = "Dossier introuvable (id: "+pid+")"; return; }
 
   USR = user; PAT = pat; pin = "";
+  upd();
   document.getElementById("ls").style.display = "none";
   document.getElementById("app").style.display = "flex";
   document.getElementById("app").style.flexDirection = "column";
