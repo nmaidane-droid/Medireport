@@ -99,6 +99,18 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 /* EMPTY */
 .empty{text-align:center;padding:40px 20px;color:#94A3B8}
 .empty-i{font-size:48px;display:block;margin-bottom:12px}
+
+/* INSTALL BUTTON */
+#install-btn{display:none;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:2px solid var(--blue);background:#fff;color:var(--blue);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;align-items:center;justify-content:center;gap:8px}
+#install-btn:active{background:var(--blue-l)}
+
+/* IOS INSTALL GUIDE */
+#ios-guide{display:none;margin-top:10px;background:#EAF1FF;border:1px solid #BFDBFE;border-radius:12px;padding:12px 14px;font-size:12px;color:#1e40af}
+#ios-guide strong{display:block;margin-bottom:6px;font-size:13px}
+.ios-step{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.ios-step:last-child{margin-bottom:0}
+.ios-ico{font-size:18px;flex-shrink:0;width:24px;text-align:center}
+#ios-guide-close{float:right;background:none;border:none;font-size:16px;color:#1e40af;cursor:pointer;padding:0;line-height:1}
 </style>
 </head>
 <body>
@@ -126,6 +138,20 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
     </div>
     <div class="perr" id="perr"></div>
     <div style="text-align:center;font-size:11px;color:#94A3B8;margin-top:8px">🔒 Accès sécurisé — CNDP Maroc</div>
+
+    <!-- Bouton installer (Android) -->
+    <button id="install-btn" onclick="triggerInstall()">
+      📲 Installer l'application
+    </button>
+
+    <!-- Guide iOS -->
+    <div id="ios-guide">
+      <button id="ios-guide-close" onclick="document.getElementById('ios-guide').style.display='none'">✕</button>
+      <strong>📲 Installer sur iPhone / iPad</strong>
+      <div class="ios-step"><span class="ios-ico">1</span><span>Appuyez sur le bouton <strong>Partager</strong> <span style="font-size:15px">⎙</span> en bas de Safari</span></div>
+      <div class="ios-step"><span class="ios-ico">2</span><span>Faites défiler et choisissez <strong>« Sur l'écran d'accueil »</strong></span></div>
+      <div class="ios-step"><span class="ios-ico">3</span><span>Appuyez sur <strong>Ajouter</strong> en haut à droite</span></div>
+    </div>
   </div>
 </div>
 
@@ -162,6 +188,73 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 </div>
 
 <script>
+
+// ── SUPABASE CONFIG ────────────────────────────────────────
+var SUPA_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
+var SUPA_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
+
+async function supaFetch(path){
+  try {
+    var res = await fetch(SUPA_URL + "/rest/v1/" + path, {
+      headers: {
+        "apikey": SUPA_KEY,
+        "Authorization": "Bearer " + SUPA_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+    if(!res.ok) return null;
+    return res.json();
+  } catch(e) { return null; }
+}
+
+async function loadDBFromSupabase(){
+  try {
+    var results = await Promise.all([
+      supaFetch("users?select=*"),
+      supaFetch("patients?select=*"),
+      supaFetch("patient_access?select=*"),
+      supaFetch("consultations?select=*&order=patient_id"),
+      supaFetch("labos?select=*&order=patient_id"),
+      supaFetch("rdv?select=*&order=patient_id"),
+      supaFetch("prescriptions?select=*&order=patient_id"),
+      supaFetch("imagerie?select=*&order=patient_id"),
+    ]);
+    var users=results[0], patients=results[1], access=results[2],
+        consultations=results[3], labos=results[4], rdv=results[5],
+        prescriptions=results[6], imagerie=results[7];
+
+    if(!users||!patients) throw new Error("Données inaccessibles");
+
+    var mappedUsers = users.map(function(u){ return Object.assign({},u,{patientId:u.patient_id}); });
+    var mappedPatients = patients.map(function(p){ return Object.assign({},p,{userId:p.user_id}); });
+    var mappedAccess = (access||[]).map(function(a){ return Object.assign({},a,{patientId:a.patient_id,userId:a.user_id}); });
+
+    var consObj={};
+    (consultations||[]).forEach(function(c){ var pid=c.patient_id; if(!consObj[pid])consObj[pid]=[]; consObj[pid].push(Object.assign({},c,{patientId:pid,tags:c.tags||[]})); });
+
+    var labosObj={};
+    (labos||[]).forEach(function(l){ var pid=l.patient_id; if(!labosObj[pid])labosObj[pid]=[]; labosObj[pid].push(Object.assign({},l,{patientId:pid,res:l.resultats||[]})); });
+
+    var rdvArr=(rdv||[]).map(function(r){ return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color}); });
+
+    var rxObj={};
+    (prescriptions||[]).forEach(function(rx){ var pid=rx.patient_id; if(!rxObj[pid])rxObj[pid]=[]; rxObj[pid].push(Object.assign({},rx,{patientId:pid,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance})); });
+
+    var imgObj={};
+    (imagerie||[]).forEach(function(img){ var pid=img.patient_id; if(!imgObj[pid])imgObj[pid]=[]; imgObj[pid].push(Object.assign({},img,{patientId:pid})); });
+
+    return {
+      users:mappedUsers, patients:mappedPatients, access:mappedAccess,
+      consultations:consObj, labos:labosObj, rdv:rdvArr, rx:rxObj, imagerie:imgObj
+    };
+  } catch(err){
+    console.warn("Supabase inaccessible, fallback localStorage:", err);
+    var raw = localStorage.getItem("medirecord_db");
+    if(raw){ try{ return JSON.parse(raw); } catch(e){} }
+    return buildDB();
+  }
+}
+
 var DB_VER = "v25";
 var DB = null, PAT = null, USR = null, pin = "";
 
@@ -178,19 +271,15 @@ function upd() {
   }
 }
 
-function login() {
+async function login() {
   var id = document.getElementById("uid").value.trim().toLowerCase();
   var err = document.getElementById("perr");
   err.textContent = "";
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  try {
-    var raw = localStorage.getItem("medirecord_db");
-    var ver = localStorage.getItem("medirecord_db_version");
-    if (raw && ver === DB_VER) DB = JSON.parse(raw);
-  } catch(e) { DB = null; }
-  if (!DB) DB = buildDB();
+  // Charger depuis Supabase ou localStorage en fallback
+  DB = await loadDBFromSupabase();
 
   var user = null;
   for (var i=0; i<DB.users.length; i++) {
@@ -613,7 +702,58 @@ var DB_JSON = '{"users":[{"id":"u1","nom":"Administrateur","prenom":"Système","
 </script>
 
 <script>
-// ── PWA — Enregistrement du Service Worker ─────────────────────────────────
+// ── PWA — Bouton d'installation ───────────────────────────────────────────
+var deferredPrompt = null;
+
+// Détecter si iOS
+var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+var isInStandaloneMode = window.matchMedia("(display-mode: standalone)").matches
+  || window.navigator.standalone === true;
+
+if (!isInStandaloneMode) {
+  if (isIOS) {
+    // iOS : afficher le guide manuel
+    var iosBtn = document.getElementById("install-btn");
+    if (iosBtn) {
+      iosBtn.style.display = "flex";
+      iosBtn.textContent = "📲 Installer sur iPhone / iPad";
+      iosBtn.onclick = function() {
+        document.getElementById("ios-guide").style.display = "block";
+        iosBtn.style.display = "none";
+      };
+    }
+  } else {
+    // Android/Chrome : intercepter le prompt natif
+    window.addEventListener("beforeinstallprompt", function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var btn = document.getElementById("install-btn");
+      if (btn) btn.style.display = "flex";
+    });
+
+    // Masquer le bouton si déjà installé
+    window.addEventListener("appinstalled", function() {
+      var btn = document.getElementById("install-btn");
+      if (btn) btn.style.display = "none";
+      deferredPrompt = null;
+    });
+  }
+}
+
+function triggerInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(result) {
+      if (result.outcome === "accepted") {
+        var btn = document.getElementById("install-btn");
+        if (btn) btn.style.display = "none";
+      }
+      deferredPrompt = null;
+    });
+  }
+}
+
+// ── PWA — Enregistrement du Service Worker ───────────────────────────────
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker.register("./sw.js")

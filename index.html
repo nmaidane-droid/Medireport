@@ -880,34 +880,104 @@ const DEFAULT_IMAGERIE = {
 };
 
 // ══════════════════════════════════════════════════════════
+//  SUPABASE CONFIG
+// ══════════════════════════════════════════════════════════
+const SUPA_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
+const SUPA_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
+
+async function supaFetch(path, opts={}){
+  const res = await fetch(SUPA_URL + "/rest/v1/" + path, {
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": "Bearer " + SUPA_KEY,
+      "Content-Type": "application/json",
+      "Prefer": opts.prefer || "return=representation",
+      ...(opts.headers||{})
+    },
+    method: opts.method||"GET",
+    body: opts.body||undefined
+  });
+  if(!res.ok){ const e = await res.text(); console.error("Supabase error:", e); return null; }
+  const ct = res.headers.get("content-type")||"";
+  return ct.includes("json") ? res.json() : null;
+}
+
+// ══════════════════════════════════════════════════════════
 //  STATE & STORAGE
 // ══════════════════════════════════════════════════════════
 const DB_VERSION = "v25";
 
-function loadDB(){
-  const raw = localStorage.getItem("medirecord_db");
-  const ver = localStorage.getItem("medirecord_db_version");
-  // If version mismatch or no data, use defaults
-  if(raw && ver === DB_VERSION){ try{ return JSON.parse(raw); } catch(e){} }
-  return resetToDefaults();
+async function loadDBFromSupabase(){
+  try {
+    const [users, patients, access, consultations, labos, rdv, prescriptions, imagerie, demandesLabo, demandesAvis] = await Promise.all([
+      supaFetch("users?select=*&order=id"),
+      supaFetch("patients?select=*&order=id"),
+      supaFetch("patient_access?select=*"),
+      supaFetch("consultations?select=*&order=patient_id"),
+      supaFetch("labos?select=*&order=patient_id"),
+      supaFetch("rdv?select=*&order=patient_id"),
+      supaFetch("prescriptions?select=*&order=patient_id"),
+      supaFetch("imagerie?select=*&order=patient_id"),
+      supaFetch("demandes_labo?select=*&order=created_at.desc"),
+      supaFetch("demandes_avis?select=*&order=created_at.desc"),
+    ]);
+    if(!users||!patients) throw new Error("Données inaccessibles");
+
+    const mappedUsers = users.map(u=>({...u, patientId:u.patient_id}));
+    const mappedPatients = patients.map(p=>({...p, userId:p.user_id}));
+    const mappedAccess = (access||[]).map(a=>({...a, patientId:a.patient_id, userId:a.user_id}));
+
+    const consObj={};
+    (consultations||[]).forEach(c=>{const pid=c.patient_id;if(!consObj[pid])consObj[pid]=[];consObj[pid].push({...c,patientId:pid,tags:c.tags||[]});});
+
+    const labosObj={};
+    (labos||[]).forEach(l=>{const pid=l.patient_id;if(!labosObj[pid])labosObj[pid]=[];labosObj[pid].push({...l,patientId:pid,res:l.resultats||[]});});
+
+    const rdvArr=(rdv||[]).map(r=>({...r,patientId:r.patient_id,s:r.statut,c:r.color}));
+
+    const rxObj={};
+    (prescriptions||[]).forEach(rx=>{const pid=rx.patient_id;if(!rxObj[pid])rxObj[pid]=[];rxObj[pid].push({...rx,patientId:pid,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance});});
+
+    const imgObj={};
+    (imagerie||[]).forEach(img=>{const pid=img.patient_id;if(!imgObj[pid])imgObj[pid]=[];imgObj[pid].push({...img,patientId:pid});});
+
+    const db = {
+      users:mappedUsers, patients:mappedPatients, access:mappedAccess,
+      consultations:consObj, labos:labosObj, rdv:rdvArr, rx:rxObj, imagerie:imgObj,
+      demandes_labo:(demandesLabo||[]).map(d=>({...d,patientId:d.patient_id})),
+      demandes_avis:(demandesAvis||[]).map(d=>({...d,patientId:d.patient_id})),
+      logs:[]
+    };
+    try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
+    return db;
+  } catch(err){
+    console.warn("Supabase inaccessible, fallback localStorage:", err);
+    return loadDBLocal();
+  }
 }
 
-function resetToDefaults(){
-  const db = {
-    users: JSON.parse(JSON.stringify(DEFAULT_USERS)),
-    patients: JSON.parse(JSON.stringify(DEFAULT_PATIENTS)),
-    access: JSON.parse(JSON.stringify(DEFAULT_ACCESS)),
-    consultations: JSON.parse(JSON.stringify(DEFAULT_CONSULTATIONS)),
-    labos: JSON.parse(JSON.stringify(DEFAULT_LABOS)),
-    rdv: JSON.parse(JSON.stringify(DEFAULT_RDV)),
-    rx: JSON.parse(JSON.stringify(DEFAULT_RX)),
-    imagerie: JSON.parse(JSON.stringify(DEFAULT_IMAGERIE)),
+function loadDBLocal(){
+  const raw=localStorage.getItem("medirecord_db");
+  const ver=localStorage.getItem("medirecord_db_version");
+  if(raw&&ver===DB_VERSION){try{return JSON.parse(raw);}catch(e){}}
+  return {
+    users:JSON.parse(JSON.stringify(DEFAULT_USERS)),
+    patients:JSON.parse(JSON.stringify(DEFAULT_PATIENTS)),
+    access:JSON.parse(JSON.stringify(DEFAULT_ACCESS)),
+    consultations:JSON.parse(JSON.stringify(DEFAULT_CONSULTATIONS)),
+    labos:JSON.parse(JSON.stringify(DEFAULT_LABOS)),
+    rdv:JSON.parse(JSON.stringify(DEFAULT_RDV)),
+    rx:JSON.parse(JSON.stringify(DEFAULT_RX)),
+    imagerie:JSON.parse(JSON.stringify(DEFAULT_IMAGERIE)),
+    demandes_labo:[],demandes_avis:[],logs:[]
   };
-  saveDB(db); return db;
 }
-function saveDB(db){ localStorage.setItem("medirecord_db",JSON.stringify(db)); localStorage.setItem("medirecord_db_version",DB_VERSION); }
 
-let DB = loadDB();
+function saveDB(db){
+  try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
+}
+
+let DB = loadDBLocal();
 let currentUser = null;
 let currentPage = "dashboard";
 let currentPatientId = null;
@@ -1050,35 +1120,45 @@ function doLogin(){
     return;
   }
 
-  // ✅ Succès
-  closeLoginModal();
-  currentUser=user;
+  // ✅ Succès — chargement Supabase
   lsPinEntry="";
-  // Log connexion
-  if(!DB.logs) DB.logs=[];
-  DB.logs.push({
-    type:"connexion",
-    date:today(),
-    heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
-    medecin:user.id,
-    patient:"—",
-    action:"Connexion réussie",
-    timestamp:new Date().toISOString()
+  // Afficher indicateur de chargement
+  if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Chargement des données…"; }
+
+  loadDBFromSupabase().then(freshDB => {
+    DB = freshDB;
+    // Récupérer l'utilisateur depuis la DB fraîche (données à jour)
+    const freshUser = DB.users.find(u=>(u.login||"").toLowerCase()===loginVal) || user;
+    currentUser = freshUser;
+
+    if(!DB.logs) DB.logs=[];
+    DB.logs.push({
+      type:"connexion",
+      date:today(),
+      heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
+      medecin:freshUser.id,
+      patient:"—",
+      action:"Connexion réussie",
+      timestamp:new Date().toISOString()
+    });
+
+    closeLoginModal();
+    G("ls").classList.remove("on"); G("ls").style.display="none";
+    G("ms").classList.add("on"); G("ms").style.display="flex";
+    currentPage=ROLE_CFG[currentUser.role].nav[0];
+    resetSessionTimer();
+    buildSidebar(); renderPage();
+    setTimeout(()=>{
+      checkBackupReminder();
+      const lastB = localStorage.getItem("medirecord_last_backup");
+      const el = document.getElementById("last-backup-date");
+      if(el && lastB) el.textContent = new Date(lastB).toLocaleDateString("fr-FR");
+      else if(el) el.textContent = "Jamais";
+    }, 500);
+  }).catch(err => {
+    console.error("Erreur chargement DB:", err);
+    if(errEl){ errEl.style.color="var(--red)"; errEl.textContent="Erreur de connexion au serveur"; }
   });
-  saveDB(DB);
-  G("ls").classList.remove("on"); G("ls").style.display="none";
-  G("ms").classList.add("on"); G("ms").style.display="flex";
-  currentPage=ROLE_CFG[currentUser.role].nav[0];
-  resetSessionTimer();
-  buildSidebar(); renderPage();
-  setTimeout(()=>{
-    checkBackupReminder();
-    // Update last backup date in admin panel
-    const lastB = localStorage.getItem("medirecord_last_backup");
-    const el = document.getElementById("last-backup-date");
-    if(el && lastB) el.textContent = new Date(lastB).toLocaleDateString("fr-FR");
-    else if(el) el.textContent = "Jamais";
-  }, 500);
 }
 
 
