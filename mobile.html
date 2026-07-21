@@ -279,38 +279,72 @@ function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  // Afficher le chargement AVANT l'async, avec requestAnimationFrame pour forcer le rendu
-  err.style.color = "var(--blue)";
-  err.textContent = "⏳ Connexion en cours…";
+  // ── Étape 1 : Essayer localStorage d'abord (instantané) ──
+  var localDB = null;
+  try {
+    var raw = localStorage.getItem("medirecord_db");
+    var ver = localStorage.getItem("medirecord_db_version");
+    if (raw && ver === DB_VER) localDB = JSON.parse(raw);
+  } catch(e) {}
 
-  // Laisser le navigateur rendre le message avant de lancer l'async
-  setTimeout(function() { loginAsync(id, err); }, 50);
+  var localUser = null;
+  if (localDB) {
+    for (var i=0; i<localDB.users.length; i++) {
+      if (localDB.users[i].login === id && localDB.users[i].role === "patient") {
+        localUser = localDB.users[i]; break;
+      }
+    }
+  }
+
+  if (localUser) {
+    // ── Utilisateur trouvé en local — login instantané ──
+    if (pin !== (localUser.pin || "000000")) { err.textContent = "Code PIN incorrect"; flash(); return; }
+    var localPid = localUser.patientId || localUser.patient_id;
+    var localPat = null;
+    for (var j=0; j<localDB.patients.length; j++) {
+      if (localDB.patients[j].id === localPid) { localPat = localDB.patients[j]; break; }
+    }
+    if (!localPat) { err.textContent = "Dossier introuvable"; return; }
+    DB = localDB;
+    doLogin(localUser, localPat, id);
+  } else {
+    // ── Pas en local (nouveau patient) → chercher dans Supabase ──
+    err.style.color = "var(--blue)";
+    err.textContent = "⏳ Première connexion…";
+    // Désactiver le clavier pendant le chargement
+    document.querySelectorAll(".k").forEach(function(k){ k.style.pointerEvents="none"; });
+
+    loadDBFromSupabase().then(function(freshDB) {
+      document.querySelectorAll(".k").forEach(function(k){ k.style.pointerEvents=""; });
+      err.textContent = ""; err.style.color = "";
+      DB = freshDB;
+
+      var supaUser = null;
+      for (var i=0; i<freshDB.users.length; i++) {
+        if (freshDB.users[i].login === id && freshDB.users[i].role === "patient") {
+          supaUser = freshDB.users[i]; break;
+        }
+      }
+      if (!supaUser) { err.textContent = "Identifiant non reconnu"; flash(); return; }
+      if (pin !== (supaUser.pin || "000000")) { err.textContent = "Code PIN incorrect"; flash(); return; }
+
+      var supaPid = supaUser.patientId || supaUser.patient_id;
+      var supaPat = null;
+      for (var j=0; j<freshDB.patients.length; j++) {
+        if (freshDB.patients[j].id === supaPid) { supaPat = freshDB.patients[j]; break; }
+      }
+      if (!supaPat) { err.textContent = "Dossier introuvable"; return; }
+      doLogin(supaUser, supaPat, id);
+    }).catch(function(e){
+      document.querySelectorAll(".k").forEach(function(k){ k.style.pointerEvents=""; });
+      err.style.color = "var(--red)";
+      err.textContent = "Erreur réseau — vérifiez votre connexion";
+    });
+  }
 }
 
-async function loginAsync(id, err) {
-  // Charger depuis Supabase ou fallback localStorage
-  DB = await loadDBFromSupabase();
-
-  err.textContent = "";
-  err.style.color = "";
-
-  var user = null;
-  for (var i=0; i<DB.users.length; i++) {
-    if (DB.users[i].login === id && DB.users[i].role === "patient") { user = DB.users[i]; break; }
-  }
-  if (!user) { err.textContent = "Identifiant non reconnu"; flash(); return; }
-  if (pin !== (user.pin || "000000")) { err.textContent = "Code PIN incorrect"; flash(); return; }
-
-  // patientId peut venir de Supabase (patient_id) ou localStorage (patientId)
-  var pid = user.patientId || user.patient_id;
-  var pat = null;
-  for (var j=0; j<DB.patients.length; j++) {
-    if (DB.patients[j].id === pid) { pat = DB.patients[j]; break; }
-  }
-  if (!pat) { err.textContent = "Dossier introuvable (id: "+pid+")"; return; }
-
-  USR = user; PAT = pat; pin = "";
-  upd();
+function doLogin(user, pat, id) {
+  USR = user; PAT = pat; pin = ""; upd();
   document.getElementById("ls").style.display = "none";
   document.getElementById("app").style.display = "flex";
   document.getElementById("app").style.flexDirection = "column";
@@ -318,6 +352,17 @@ async function loginAsync(id, err) {
   showTab("syn");
   resetTimer();
   startRealtimeAcces();
+
+  // Rafraîchir depuis Supabase en arrière-plan si login local
+  if (DB && DB.users && DB.users.length > 0) {
+    loadDBFromSupabase().then(function(freshDB) {
+      DB = freshDB;
+      var freshUser = freshDB.users.find(function(u){ return u.login === id; });
+      var freshPid = freshUser ? (freshUser.patientId || freshUser.patient_id) : null;
+      var freshPat = freshPid ? freshDB.patients.find(function(p){ return p.id === freshPid; }) : null;
+      if (freshPat) { PAT = freshPat; buildHeader(); showTab("syn"); }
+    }).catch(function(){});
+  }
 }
 
 function flash() {
