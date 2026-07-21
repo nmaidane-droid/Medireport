@@ -339,7 +339,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
       <button class="pin-key" onclick="lsPin('7')" style="height:52px;font-size:20px">7</button>
       <button class="pin-key" onclick="lsPin('8')" style="height:52px;font-size:20px">8</button>
       <button class="pin-key" onclick="lsPin('9')" style="height:52px;font-size:20px">9</button>
-      <button class="pin-key del" onclick="lsPin('del')" style="height:52px;font-size:16px">⌫</button>
+      <button class="pin-key del" onclick="lsPin('del')" style="height:52px;font-size:12px;font-weight:700;color:var(--g600)">Effacer</button>
       <button class="pin-key" onclick="lsPin('0')" style="height:52px;font-size:20px">0</button>
       <button onclick="doLogin()" style="height:52px;border-radius:10px;background:var(--blue);color:#fff;font-size:14px;font-weight:800;border:none;cursor:pointer">OK ✓</button>
     </div>
@@ -2119,7 +2119,7 @@ function rDashboard(){
     </div>`:''}`;
   }
   const recentHtml=patients.slice(0,5).map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans${p.cin?' · '+p.cin:''} · ${(p.pathologies||[]).join(", ")||"—"}</div></div><div style="display:flex;gap:6px;align-items:center">${p.allergies?.length?`<span class="badge br">⚠</span>`:""}${p.dialyse?`<span class="badge bt">💧</span>`:""}<span style="color:var(--g300)">›</span></div></div>`).join("")+
-    (patients.length>5?`<div style="text-align:center;padding:10px;border-top:1px solid var(--g100)"><a href="#" onclick="goPage('patients');return false;" style="color:var(--blue);font-size:13px;font-weight:700">Voir tous les ${patients.length} patients →</a></div>`:"");
+    (patients.length>5?"":"");
   // Filter RDV for current week (Mon-Sun)
   const now = new Date();
   const dow = now.getDay(); // 0=Sun,1=Mon,...
