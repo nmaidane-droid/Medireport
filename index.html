@@ -1228,7 +1228,7 @@ function lsPin(k){
     const dot=document.getElementById("lpd"+i);
     if(dot) dot.className="pin-dot"+(i<lsPinEntry.length?" filled":"");
   }
-  if(lsPinEntry.length===6) setTimeout(doLogin,150);
+  // Login déclenché uniquement par le bouton OK
 }
 
 function buildLogin(){
