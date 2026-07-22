@@ -1440,29 +1440,11 @@ function getNotifications(){
 
   // Renouvellement supprimé — durée de traitement gérée directement sur l'ordonnance
 
-  // 3. Valeurs labo hors norme
-  patients.forEach(p=>{
-    const labos=DB.labos[p.id]||[];
-    if(labos.length){
-      const last=labos[0];
-      const bads=last.res.filter(r=>r.s==="bad");
-      if(bads.length){
-        notifs.push({type:"labo",icon:"🧪",color:"#E53935",title:"Valeurs hors norme",body:`${bads.length} résultat(s) anormal(aux)`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"labo_bad_"+p.id+"_"+last.id,action:()=>openDossier(p.id)});
-      }
-    }
-  });
 
-  // 4. Patients dialyse — rappel séance
-  if(["medecin","specialiste","admin"].includes(u.role)){
-    patients.filter(p=>p.dialyse).forEach(p=>{
-      notifs.push({type:"dialyse",icon:"💧",color:"#0BA896",title:"Patient en dialyse",body:`${p.seances_semaine} séances/semaine`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"dialyse_"+p.id,action:()=>openDossier(p.id)});
-    });
-  }
 
-  // 5. Allergies documentées — rappel
-  patients.filter(p=>p.allergies?.length).forEach(p=>{
-    notifs.push({type:"allergie",icon:"⚠️",color:"#E53935",title:"Allergie documentée",body:`${p.allergies.join(", ")}`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"allergie_"+p.id,action:()=>openDossier(p.id)});
-  });
+
+
+
 
   return notifs;
 }
