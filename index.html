@@ -1022,7 +1022,9 @@ async function syncChanged(changed){
     ind:rx.ind||null, dr:rx.dr||null, date:rx.date||null,
     statut:rx.s||rx.statut||"active",
     renouvellement:rx.ren||rx.renouvellement||null,
-    ordonnance:rx.ord||rx.ordonnance||null
+    ordonnance:rx.ord||rx.ordonnance||null,
+    duree_val:rx.duree_val||null, duree_unite:rx.duree_unite||null,
+    a_vie:rx.a_vie||false, date_fin:rx.date_fin||null
   }));
   else if(table==="labos") data = rows.map(l=>({
     id:l.id, patient_id:l.patientId||l.patient_id, date:l.date||null,
@@ -4348,7 +4350,16 @@ function dRx(){
     const rows=group.map(r=>{
       const rxDr=DB.users.find(x=>x.id===r.dr);
       const rxDrLabel=rxDr?`<div style="font-size:11px;color:#64748B;margin-top:4px">Prescrit par <strong>${rxDr.titre||"Dr."} ${rxDr.nom}</strong> le ${r.date}</div>`:`<div style="font-size:11px;color:#94A3B8;margin-top:4px">Prescrit le ${r.date}</div>`;
-      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--g100)"><div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--g900)">${r.med} <span style="font-weight:400;color:var(--g500)">${r.dos}</span></div><div style="font-size:12px;color:var(--g600);margin-top:3px;line-height:1.5">${r.pos}</div>${rxDrLabel}<div style="margin-top:6px">${bdg(r.ind,"bb")}</div></div><div style="text-align:right;flex-shrink:0">${r.s==="active"?bdg("Actif","bgn"):r.s==="stopped"?bdg("Arrêté","bgr"):bdg("⚠ Allergie","br")}${r.ren&&r.ren!=="—"?`<div style="font-size:10px;color:var(--g400);margin-top:5px">Renouvellement<br/><strong>${r.ren}</strong></div>`:""}</div></div>`;
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--g100)"><div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--g900)">${r.med} <span style="font-weight:400;color:var(--g500)">${r.dos}</span></div><div style="font-size:12px;color:var(--g600);margin-top:3px;line-height:1.5">${r.pos}</div>${rxDrLabel}<div style="margin-top:6px">${bdg(r.ind,"bb")}</div></div><div style="text-align:right;flex-shrink:0">${(()=>{
+        if(r.s==="allergy") return bdg("⚠ Allergie","br");
+        if(r.a_vie) return bdg("Actif","bgn");
+        if(r.date_fin){
+          const parts=r.date_fin.split("/");
+          const fin=parts.length===3?new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0])):null;
+          if(fin&&fin<new Date()) return bdg("Arrêté","bgr");
+        }
+        return r.s==="active"?bdg("Actif","bgn"):bdg("Arrêté","bgr");
+      })()}${r.a_vie?`<div style="font-size:10px;color:#0BA896;margin-top:5px;font-weight:700">♾️ À vie</div>`:r.date_fin?`<div style="font-size:10px;color:var(--g400);margin-top:5px">Fin le<br/><strong>${r.date_fin}</strong></div>`:""}</div></div>`;
     }).join("");
     const titre=drU?.titre?drU.titre+" ":"Dr. ";
     return `<div style="border:1px solid var(--g200);border-radius:12px;overflow:hidden;margin-bottom:10px"><div id="hd-${ordId}" onclick="toggleOrd('${ordId}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--g50);cursor:pointer;-webkit-tap-highlight-color:rgba(26,110,255,.08);transition:background .15s"><div style="width:4px;height:40px;border-radius:2px;background:${color};flex-shrink:0"></div><div style="flex:1"><div style="font-size:12px;font-weight:800;color:var(--g900)">📋 Ordonnance du ${first.date}</div><div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">${drU?`<div style="display:flex;align-items:center;gap:6px"><div class="av" style="width:22px;height:22px;font-size:9px;background:${drU.color}">${drU.initials}</div><span style="font-size:12px;font-weight:700;color:var(--g700)">${titre}${drU.nom}</span><span style="font-size:11px;color:var(--g400)">${drU.spec||""}</span></div>`:""}</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><button onclick="event.stopPropagation();printOrdonnance('${p.id}','${first.ord||ordId}')" style="background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ Imprimer</button><span style="font-size:11px;font-weight:700;color:var(--g500)">${group.length} médicament${group.length>1?"s":""}</span><span id="arr-${ordId}" style="font-size:16px;color:var(--g400);transition:transform .2s">▸</span></div></div><div id="body-${ordId}" style="display:none">${rows}</div></div>`;
@@ -4371,12 +4382,38 @@ function dRx(){
 
 function showAddRx(pid){
   const ordId=uid();
-  function addMedRow(container,idx){const row=document.createElement("div");row.className="rx-med-row";row.style="border:1px solid var(--g200);border-radius:10px;padding:14px;margin-bottom:10px;position:relative";row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:var(--blue)">Médicament ${idx+1}</div>${idx>0?`<button onclick="this.closest('.rx-med-row').remove()" style="font-size:11px;color:var(--red);font-weight:700;background:var(--red-l);border:none;padding:3px 9px;border-radius:6px;cursor:pointer">✕ Retirer</button>`:""}</div><div class="fr"><div class="fg"><label>Médicament</label><input class="rx-m" value=""/></div><div class="fg"><label>Dosage</label><input class="rx-d" value=""/></div></div><div class="fg"><label>Posologie</label><input class="rx-p" value=""/></div><div class="fg"><label>Indication</label><input class="rx-i" value=""/></div>`;container.appendChild(row);}
-  const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouvelle ordonnance</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div style="background:var(--blue-l);border:1px solid #BFDBFE;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--blue-d)"><strong>📋 Ordonnance du ${today()}</strong> · ${currentUser.titre||"Dr."} ${currentUser.nom} · ${currentUser.spec||""}</div><div class="fr"><div class="fg"><label>Date de renouvellement</label><input id="rx-ren" type="date"/></div><div class="fg"><label>Statut</label><select id="rx-st"><option value="active">Actif</option><option value="stopped">Arrêté</option></select></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px"><div style="font-size:12px;font-weight:700;color:var(--g700)">Médicaments prescrits</div><button class="btn bs bsm" id="rx-add-med">+ Ajouter</button></div><div id="rx-meds-container"></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="rx-s">Enregistrer l'ordonnance</button></div></div>`);
+  function addMedRow(container,idx){const row=document.createElement("div");row.className="rx-med-row";row.style="border:1px solid var(--g200);border-radius:10px;padding:14px;margin-bottom:10px;position:relative";row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:var(--blue)">Médicament ${idx+1}</div>${idx>0?`<button onclick="this.closest('.rx-med-row').remove()" style="font-size:11px;color:var(--red);font-weight:700;background:var(--red-l);border:none;padding:3px 9px;border-radius:6px;cursor:pointer">✕ Retirer</button>`:""}</div><div class="fr"><div class="fg"><label>Médicament</label><input class="rx-m" value=""/></div><div class="fg"><label>Dosage</label><input class="rx-d" value=""/></div></div><div class="fg"><label>Posologie</label><input class="rx-p" value=""/></div><div class="fg"><label>Indication</label><input class="rx-i" value=""/></div><div class="fr" style="align-items:center;gap:12px"><div class="fg" style="flex:0 0 80px"><label>Durée</label><input class="rx-dv" type="number" min="1" value="" placeholder="ex: 30"/></div><div class="fg" style="flex:0 0 110px"><label>Unité</label><select class="rx-du"><option value="jours">Jours</option><option value="semaines">Semaines</option><option value="mois" selected>Mois</option><option value="annees">Années</option></select></div><div class="fg" style="display:flex;align-items:center;gap:6px;padding-top:18px"><input type="checkbox" class="rx-av" style="width:auto;padding:0"/><label style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--g700)">À vie</label></div></div>`;container.appendChild(row);}
+  const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouvelle ordonnance</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div style="background:var(--blue-l);border:1px solid #BFDBFE;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--blue-d)"><strong>📋 Ordonnance du ${today()}</strong> · ${currentUser.titre||"Dr."} ${currentUser.nom} · ${currentUser.spec||""}</div><div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px"><div style="font-size:12px;font-weight:700;color:var(--g700)">Médicaments prescrits</div><button class="btn bs bsm" id="rx-add-med">+ Ajouter</button></div><div id="rx-meds-container"></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="rx-s">Enregistrer l'ordonnance</button></div></div>`);
   const container=ov.querySelector("#rx-meds-container");addMedRow(container,0);
   ov.querySelector("#rx-add-med").onclick=()=>{addMedRow(container,container.querySelectorAll(".rx-med-row").length);};
-  ov.querySelector("#rx-s").onclick=()=>{const ren=G("rx-ren").value?new Date(G("rx-ren").value).toLocaleDateString("fr-FR"):"—";const st=G("rx-st").value;if(!DB.rx[pid])DB.rx[pid]=[];let added=0;container.querySelectorAll(".rx-med-row").forEach(row=>{const m=row.querySelector(".rx-m").value.trim();if(m){DB.rx[pid].unshift({id:uid(),med:m,dos:row.querySelector(".rx-d").value||"—",pos:row.querySelector(".rx-p").value||"—",ind:row.querySelector(".rx-i").value||"—",dr:currentUser.id,date:today(),s:st,ren,ord:ordId});added++;}});if(!added){alert("Ajoutez au moins un médicament.");return;}
-    saveDB(DB,{table:"prescriptions",rows:DB.rx[pid]||[]});
+  ov.querySelector("#rx-s").onclick=()=>{
+    if(!DB.rx[pid])DB.rx[pid]=[];let added=0;
+    container.querySelectorAll(".rx-med-row").forEach(row=>{
+      const m=row.querySelector(".rx-m").value.trim();
+      if(m){
+        const aVie=row.querySelector(".rx-av")?.checked||false;
+        const dureeVal=parseInt(row.querySelector(".rx-dv")?.value)||0;
+        const dureeUnite=row.querySelector(".rx-du")?.value||"mois";
+        // Calculer date_fin
+        let dateFin=null;
+        if(!aVie && dureeVal>0){
+          const d=new Date();
+          if(dureeUnite==="jours") d.setDate(d.getDate()+dureeVal);
+          else if(dureeUnite==="semaines") d.setDate(d.getDate()+dureeVal*7);
+          else if(dureeUnite==="mois") d.setMonth(d.getMonth()+dureeVal);
+          else if(dureeUnite==="annees") d.setFullYear(d.getFullYear()+dureeVal);
+          dateFin=d.toLocaleDateString("fr-FR");
+        }
+        // Statut calculé selon date_fin
+        const st=aVie?"active":(dateFin?((new Date())<new Date(dateFin.split("/").reverse().join("-"))?"active":"stopped"):"active");
+        DB.rx[pid].unshift({id:uid(),med:m,dos:row.querySelector(".rx-d").value||"—",pos:row.querySelector(".rx-p").value||"—",ind:row.querySelector(".rx-i").value||"—",dr:currentUser.id,date:today(),s:st,a_vie:aVie,duree_val:dureeVal,duree_unite:dureeUnite,date_fin:dateFin,ord:ordId});
+        added++;
+      }
+    });
+    if(!added){alert("Ajoutez au moins un médicament.");return;}
+    // Ajouter patient_id explicitement pour Supabase
+    const rxToSync = (DB.rx[pid]||[]).map(r=>Object.assign({},r,{patient_id:pid}));
+    saveDB(DB,{table:"prescriptions",rows:rxToSync});
     ov.remove();rxTab="active";dRx();
     // ── Impression automatique de l'ordonnance ──
     const p=DB.patients.find(x=>x.id===pid);

@@ -164,7 +164,7 @@ function p(v) {
   if (v === "del") { pin = pin.slice(0,-1); }
   else if (pin.length < 6) { pin += v; }
   upd();
-  if (pin.length === 6 && document.getElementById("uid").value.trim()) login();
+  // Login déclenché uniquement par le bouton OK ✓
 }
 function upd() {
   for (var i=0;i<6;i++) {
@@ -563,17 +563,25 @@ function tabMed() {
     return pd(b.date)-pd(a.date);
   });
   // Debug temporaire
-  if(!rx.length) return emp("💊","Aucune prescription");
+  var refreshBtn='<div style="text-align:right;margin-bottom:10px"><button onclick="refreshPatientData()" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#64748B;font-family:inherit;cursor:pointer">🔄 Actualiser</button></div>';
+  if(!rx.length) return refreshBtn + emp("💊","Aucune prescription");
   var act=rx.filter(function(r){return r.s==="active";});
   var arr=rx.filter(function(r){return r.s==="stopped";});
-  var h="";
+  var h=refreshBtn;
   if(act.length) h+='<div class="stit">Traitements actuels ('+act.length+')</div>';
   act.forEach(function(r){
     var drRx = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
     var drLabel = drRx ? (drRx.titre||"Dr.") + " " + drRx.nom + (drRx.spec ? " · " + drRx.spec : "") : "";
     h+='<div class="rxi"><div class="rxio">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div><div style="font-size:12px;color:var(--blue);font-weight:600">'+r.pos+'</div>'+
     (drLabel ? '<div style="font-size:11px;color:#0BA896;font-weight:600;margin-top:3px">👨‍⚕️ '+drLabel+'</div>' : '')+
-    '<div style="font-size:11px;color:#94A3B8;margin-top:2px">Prescrit par <strong style="color:#64748B">'+(drRx?(drRx.titre||"Dr.")+" "+drRx.nom:"—")+'</strong> le '+r.date+'</div></div>'+bdg("Actif","bgn")+'</div>';
+    '<div style="font-size:11px;color:#94A3B8;margin-top:2px">Prescrit par <strong style="color:#64748B">'+(drRx?(drRx.titre||"Dr.")+" "+drRx.nom:"—")+'</strong> le '+r.date+'</div>'+
+    (r.a_vie?'<div style="font-size:11px;color:#0BA896;font-weight:700;margin-top:2px">♾️ À vie</div>':
+      r.date_fin?'<div style="font-size:11px;color:#94A3B8;margin-top:2px">Fin le <strong>'+r.date_fin+'</strong></div>':'')+
+    '</div>'+(function(){
+      if(r.a_vie) return bdg("Actif","bgn");
+      if(r.date_fin){var p=r.date_fin.split("/");var fin=p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])):null;if(fin&&fin<new Date())return bdg("Arrêté","bgr");}
+      return bdg("Actif","bgn");
+    })()+'</div>';
   });
   if(arr.length) h+='<div class="stit" style="margin-top:14px">Arrêtés ('+arr.length+')</div>';
   arr.forEach(function(r){
@@ -732,7 +740,12 @@ function refreshPatientData() {
       DB.rx = DB.rx || {};
       DB.rx[pid] = rows.map(function(rx) {
         var st = rx.statut || "active";
-        return Object.assign({}, rx, {patientId:rx.patient_id, s:st, ren:rx.renouvellement, ord:rx.ordonnance});
+        return Object.assign({}, rx, {
+          patientId:rx.patient_id, s:st,
+          ren:rx.renouvellement, ord:rx.ordonnance,
+          a_vie:rx.a_vie||false, duree_val:rx.duree_val||null,
+          duree_unite:rx.duree_unite||null, date_fin:rx.date_fin||null
+        });
       });
       // Rafraîchir immédiatement si on est sur l'onglet médicaments
       var activeTab = document.querySelector(".tab.on");
