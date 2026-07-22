@@ -421,7 +421,6 @@ const ROLE_CFG = {
   specialiste:{l:"Spécialiste",     i:"❤️", c:"#E53935", nav:["dashboard","patients","agenda"]},
   laboratoire:{l:"Laboratoire",     i:"🧪", c:"#0BA896", nav:["dashboard","patients","agenda"]},
   imagerie:   {l:"Imagerie",        i:"🔬", c:"#F59E0B", nav:["dashboard","patients","agenda"]},
-  pharmacie:  {l:"Pharmacie",       i:"💊", c:"#7C3AED", nav:["dashboard","patients"]},
   patient:    {l:"Patient",         i:"👤", c:"#6B7280", nav:["dashboard","dossier","agenda"]},
 };
 
@@ -480,7 +479,6 @@ const SPECIALITES = [
   {g:"Imagerie & Biologie",   v:"Biologie médicale"},
   {g:"Imagerie & Biologie",   v:"Anatomo-pathologie"},
   // Autres
-  {g:"Autres",                v:"Officine pharmaceutique"},
   {g:"Autres",                v:"Nutrition & Diététique"},
   {g:"Autres",                v:"Kinésithérapie"},
   {g:"Autres",                v:"Psychologie clinique"},
@@ -531,9 +529,6 @@ const DEFAULT_USERS = [
   {id:"u22", nom:"RadioPlus",     prenom:"Centre",   role:"imagerie",   spec:"Radiologie",              structure:"RadioPlus — Rabat",                  color:"#E53935", initials:"RP", pin:"000000", login:"imagerie.radioplus"},
   {id:"u23", nom:"IRM Maroc",     prenom:"Centre",   role:"imagerie",   spec:"IRM & Scanner",           structure:"IRM Maroc — Casablanca",            color:"#7C3AED", initials:"IM", pin:"000000", login:"imagerie.irmmaroc"},
   // Pharmacies
-  {id:"u8",  nom:"Pharma Plus",   prenom:"",         role:"pharmacie",  spec:"Officine",               structure:"Pharmacie Plus — Casablanca",        color:"#7C3AED", initials:"PP", pin:"000000", login:"pharma.plus"},
-  {id:"u24", nom:"Al Shifa",      prenom:"",         role:"pharmacie",  spec:"Officine",               structure:"Pharmacie Al Shifa — Dakhla",        color:"#E53935", initials:"AS", pin:"000000", login:"pharma.alshifa"},
-  {id:"u25", nom:"Ibn Baitar",    prenom:"",         role:"pharmacie",  spec:"Officine",               structure:"Pharmacie Ibn Baitar — Rabat",       color:"#0BA896", initials:"IB", pin:"000000", login:"pharma.ibnbaitar"},
   // Néphrologue
   {id:"u28",nom:"Zaid",prenom:"Driss",role:"specialiste",titre:"Pr.",spec:"Néphrologie",structure:"Centre Alhayat",adresse:"Avenue Hassan II, Casablanca",tel_pro:"+212 5 22 45 67 89",ville:"Casablanca",login:"pr.zaid",color:"#0BA896",initials:"DZ",pin:"000000"},
   // Patients
@@ -1168,7 +1163,7 @@ function getAccessiblePatients(userId){
   if(["admin","medecin","specialiste"].includes(u.role)) return DB.patients;
   // Patient : uniquement son propre dossier
   if(u.role==="patient") return DB.patients.filter(p=>p.userId===userId||p.id===u.patientId);
-  // Labo, imagerie, pharmacie : uniquement via accès explicite
+  // Labo, imagerie : uniquement via accès explicite
   const ids = new Set(DB.access.filter(a=>a.userId===userId).map(a=>a.patientId));
   return DB.patients.filter(p=>ids.has(p.id));
 }
@@ -4411,7 +4406,7 @@ function dAccesPat(){
 
 function delAccess(aid,pid){DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);dAccesPat();}
 
-function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label><input id="ac-ex" type="date"/></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie","pharmacie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){alert("Sélectionnez un utilisateur");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;DB.access.push({id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""});saveDB(DB);ov.remove();dAccesPat();};}
+function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label><input id="ac-ex" type="date"/></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){alert("Sélectionnez un utilisateur");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;DB.access.push({id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""});saveDB(DB);ov.remove();dAccesPat();};}
 
 function rAgenda(){
   const u=currentUser;
