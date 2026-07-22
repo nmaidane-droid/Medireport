@@ -1424,33 +1424,21 @@ function getNotifications(){
   const myNewLabo=(DB.demandes_labo||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_labo_"+u.id)||"[]").includes(d.id));
   myNewLabo.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
-    notifs.push({type:"labo",icon:"🧪",color:"var(--green)",title:"Résultats labo disponibles",body:`Réf: ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",action:()=>openDossier(d.patientId)});
+    notifs.push({type:"labo",icon:"🧪",color:"var(--green)",title:"Résultats labo disponibles",body:`Réf: ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",key:"labo_"+d.id,action:()=>openDossier(d.patientId)});
   });
   // 0b. Nouveaux avis spécialisés
   const myNewAvis=(DB.demandes_avis||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_avis_"+u.id)||"[]").includes(d.id));
   myNewAvis.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
-    notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Rapport spécialiste disponible",body:`${d.specialite} — ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",action:()=>openDossier(d.patientId)});
+    notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Rapport spécialiste disponible",body:`${d.specialite} — ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",key:"avis_"+d.id,action:()=>openDossier(d.patientId)});
   });
   // 1. RDV à confirmer
   DB.rdv.filter(r=>r.s==="à confirmer"&&patients.some(p=>p.id===r.patientId)).forEach(r=>{
     const p=DB.patients.find(x=>x.id===r.patientId);
-    notifs.push({type:"rdv",icon:"📅",color:"#F59E0B",title:"RDV à confirmer",body:`${r.h} le ${r.day} ${r.mo}`,patientId:r.patientId,patient:p?p.prenom+" "+p.nom:"—",action:()=>openDossier(r.patientId)});
+    notifs.push({type:"rdv",icon:"📅",color:"#F59E0B",title:"RDV à confirmer",body:`${r.h} le ${r.day} ${r.mo}`,patientId:r.patientId,patient:p?p.prenom+" "+p.nom:"—",key:"rdv_"+r.id,action:()=>openDossier(r.patientId)});
   });
 
-  // 2. Ordonnances à renouveler (dans les 30 jours)
-  patients.forEach(p=>{
-    (DB.rx[p.id]||[]).filter(r=>r.s==="active"&&r.ren&&r.ren!=="—").forEach(rx=>{
-      const parts=rx.ren.split("/");
-      if(parts.length===3){
-        const renDate=new Date(parts[2],parts[1]-1,parts[0]);
-        const diffDays=Math.round((renDate-today_ms)/(1000*60*60*24));
-        if(diffDays>=0&&diffDays<=30){
-          notifs.push({type:"rx",icon:"💊",color:"#7C3AED",title:"Renouvellement à venir",body:`${rx.med} (dans ${diffDays}j)`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
-        }
-      }
-    });
-  });
+  // Renouvellement supprimé — durée de traitement gérée directement sur l'ordonnance
 
   // 3. Valeurs labo hors norme
   patients.forEach(p=>{
@@ -1459,7 +1447,7 @@ function getNotifications(){
       const last=labos[0];
       const bads=last.res.filter(r=>r.s==="bad");
       if(bads.length){
-        notifs.push({type:"labo",icon:"🧪",color:"#E53935",title:"Valeurs hors norme",body:`${bads.length} résultat(s) anormal(aux)`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
+        notifs.push({type:"labo",icon:"🧪",color:"#E53935",title:"Valeurs hors norme",body:`${bads.length} résultat(s) anormal(aux)`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"labo_bad_"+p.id+"_"+last.id,action:()=>openDossier(p.id)});
       }
     }
   });
@@ -1467,13 +1455,13 @@ function getNotifications(){
   // 4. Patients dialyse — rappel séance
   if(["medecin","specialiste","admin"].includes(u.role)){
     patients.filter(p=>p.dialyse).forEach(p=>{
-      notifs.push({type:"dialyse",icon:"💧",color:"#0BA896",title:"Patient en dialyse",body:`${p.seances_semaine} séances/semaine`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
+      notifs.push({type:"dialyse",icon:"💧",color:"#0BA896",title:"Patient en dialyse",body:`${p.seances_semaine} séances/semaine`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"dialyse_"+p.id,action:()=>openDossier(p.id)});
     });
   }
 
   // 5. Allergies documentées — rappel
   patients.filter(p=>p.allergies?.length).forEach(p=>{
-    notifs.push({type:"allergie",icon:"⚠️",color:"#E53935",title:"Allergie documentée",body:`${p.allergies.join(", ")}`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
+    notifs.push({type:"allergie",icon:"⚠️",color:"#E53935",title:"Allergie documentée",body:`${p.allergies.join(", ")}`,patientId:p.id,patient:p.prenom+" "+p.nom,key:"allergie_"+p.id,action:()=>openDossier(p.id)});
   });
 
   return notifs;
@@ -1491,48 +1479,87 @@ function renderNotifBadge(){
   }
 }
 
+// ── Clés vues chargées depuis Supabase ──────────────────
+let _vuedNotifKeys = null;
+async function loadVuesNotifs(){
+  if(_vuedNotifKeys !== null) return _vuedNotifKeys;
+  try {
+    const rows = await supaFetch("notifications_vues?user_id=eq."+currentUser.id+"&select=notification_key");
+    _vuedNotifKeys = new Set((rows||[]).map(r=>r.notification_key));
+  } catch(e){ _vuedNotifKeys = new Set(); }
+  return _vuedNotifKeys;
+}
+async function markNotifVue(key, action){
+  if(!_vuedNotifKeys) _vuedNotifKeys = new Set();
+  _vuedNotifKeys.add(key);
+  try {
+    await supaFetch("notifications_vues", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Prefer":"resolution=ignore-duplicates"},
+      body:JSON.stringify({user_id:currentUser.id, notification_key:key})
+    });
+  } catch(e){}
+  panel_close();
+  if(action) action();
+  renderNotifBadge();
+}
+function panel_close(){
+  const panel=document.getElementById("notif-panel");
+  if(panel) panel.style.display="none";
+}
+
 function toggleNotifPanel(){
   const panel = document.getElementById("notif-panel");
   if(!panel) return;
   const isOpen = panel.style.display === "flex";
-  if(isOpen){
-    panel.style.display = "none";
-    return;
-  }
-  // Render notifications
-  const notifs = getNotifications();
+  if(isOpen){ panel.style.display="none"; return; }
+
   const list = document.getElementById("notif-list");
   if(!list) return;
-  if(!notifs.length){
-    list.innerHTML=`<div style="padding:30px;text-align:center;color:var(--g400);font-size:13px">✅ Aucune notification</div>`;
-  } else {
-    // Grouper par patient
-    const byPatient = {};
-    notifs.forEach(n=>{
-      const key = n.patientId || "global";
-      if(!byPatient[key]) byPatient[key] = {patient:n.patient, notifs:[]};
-      byPatient[key].notifs.push(n);
-    });
-    list.innerHTML = Object.entries(byPatient).map(([pid, group])=>`
-      <div style="border-bottom:2px solid var(--g100)">
-        ${group.patient?`<div style="padding:8px 16px 4px;font-size:11px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;background:var(--g50)">👤 ${group.patient}</div>`:""}
-        ${group.notifs.map(n=>`
-          <div onclick="toggleNotifPanel();(${n.action.toString()})()" style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--g100)" onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
-            <div style="width:32px;height:32px;border-radius:50%;background:${n.color}22;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${n.icon}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:700;color:var(--g900)">${n.title}</div>
-              <div style="font-size:12px;color:var(--g500);margin-top:1px;line-height:1.4">${n.body}</div>
-            </div>
-          </div>`).join("")}
-      </div>`).join("");
-  }
-  panel.style.display = "flex";
+  list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--g400);font-size:13px">⏳ Chargement...</div>`;
+  panel.style.display="flex";
 
-  // Close on outside click
+  loadVuesNotifs().then(vues=>{
+    const notifs = getNotifications().filter(n=>!vues.has(n.key));
+    if(!notifs.length){
+      list.innerHTML=`<div style="padding:30px;text-align:center;color:var(--g400);font-size:13px">✅ Aucune notification</div>`;
+    } else {
+      // Grouper par patient, trié alphabétiquement
+      const byPatient = {};
+      notifs.forEach(n=>{
+        const key = n.patientId||"global";
+        if(!byPatient[key]) byPatient[key]={patient:n.patient||"", notifs:[]};
+        byPatient[key].notifs.push(n);
+      });
+      const sorted = Object.entries(byPatient).sort((a,b)=>a[1].patient.localeCompare(b[1].patient,"fr"));
+      list.innerHTML = sorted.map(([pid,group],gi)=>`
+        <div style="border-bottom:1px solid var(--g100)">
+          <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.ntri').textContent=this.nextElementSibling.style.display==='none'?'▶':'▼'"
+            style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;background:var(--g50);user-select:none">
+            <div style="font-size:12px;font-weight:800;color:var(--g700)">👤 ${group.patient||"Général"}</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px">${group.notifs.length}</span>
+              <span class="ntri" style="font-size:12px;color:var(--g400)">▶</span>
+            </div>
+          </div>
+          <div style="display:none">
+            ${group.notifs.map(n=>`
+              <div onclick="markNotifVue('${n.key}',${n.action.toString()})" style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;cursor:pointer;transition:background .12s;border-top:1px solid var(--g100)" onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
+                <div style="width:30px;height:30px;border-radius:50%;background:${n.color}22;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${n.icon}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700;color:var(--g900)">${n.title}</div>
+                  <div style="font-size:12px;color:var(--g500);margin-top:1px;line-height:1.4">${n.body}</div>
+                </div>
+              </div>`).join("")}
+          </div>
+        </div>`).join("");
+    }
+  });
+
   setTimeout(()=>{
-    const close = (e)=>{ if(!panel.contains(e.target)&&e.target.id!=="btn-notif"){ panel.style.display="none"; document.removeEventListener("click",close); } };
-    document.addEventListener("click", close);
-  }, 100);
+    const close=(e)=>{const p=document.getElementById("notif-panel");if(p&&!p.contains(e.target)&&e.target.id!=="btn-notif"){p.style.display="none";document.removeEventListener("click",close);}};
+    document.addEventListener("click",close);
+  },100);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1583,13 +1610,13 @@ function buildSidebar(){
   decoDiv.addEventListener("click", ()=>{
     G("ms").classList.remove("on"); G("ms").style.display="none";
     G("ls").classList.add("on"); G("ls").style.display="flex";
-    currentUser = null;
+    currentUser = null; _vuedNotifKeys = null;
   });
   decoDiv.addEventListener("touchend", (e)=>{
     e.preventDefault();
     G("ms").classList.remove("on"); G("ms").style.display="none";
     G("ls").classList.add("on"); G("ls").style.display="flex";
-    currentUser = null;
+    currentUser = null; _vuedNotifKeys = null;
   }, {passive:false});
   nav.appendChild(decoDiv);
 
