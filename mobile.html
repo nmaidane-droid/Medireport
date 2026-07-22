@@ -698,46 +698,65 @@ var DB_JSON = '{"users":[{"id":"u1","nom":"Administrateur","prenom":"Système","
 function refreshPatientData() {
   if (!PAT) return;
   var pid = PAT.id;
+  var pending = 5; // nombre de requêtes
+
+  function done() {
+    pending--;
+    if (pending <= 0) {
+      // Rafraîchir l'onglet actif une fois toutes les données chargées
+      var activeTab = document.querySelector(".tab.on");
+      if (activeTab) activeTab.click();
+      console.log("[Mobile] Données patient rechargées depuis Supabase");
+    }
+  }
 
   // Prescriptions
   supaGet("prescriptions?patient_id=eq." + pid + "&select=*&order=created_at.desc", function(rows) {
-    if (!rows) return;
-    DB.rx = DB.rx || {};
-    DB.rx[pid] = rows.map(function(rx) {
-      return Object.assign({}, rx, {patientId:rx.patient_id, s:rx.statut, ren:rx.renouvellement, ord:rx.ordonnance});
-    });
+    if (rows) {
+      DB.rx = DB.rx || {};
+      DB.rx[pid] = rows.map(function(rx) {
+        return Object.assign({}, rx, {patientId:rx.patient_id, s:rx.statut, ren:rx.renouvellement, ord:rx.ordonnance});
+      });
+    }
+    done();
   });
 
   // RDV
   supaGet("rdv?patient_id=eq." + pid + "&select=*&order=created_at.desc", function(rows) {
-    if (!rows) return;
-    var others = (DB.rdv || []).filter(function(r){ return r.patientId !== pid; });
-    var fresh = rows.map(function(r){ return Object.assign({}, r, {patientId:r.patient_id, s:r.statut, c:r.color}); });
-    DB.rdv = others.concat(fresh);
+    if (rows) {
+      var others = (DB.rdv || []).filter(function(r){ return r.patientId !== pid; });
+      var fresh = rows.map(function(r){ return Object.assign({}, r, {patientId:r.patient_id, s:r.statut, c:r.color}); });
+      DB.rdv = others.concat(fresh);
+    }
+    done();
   });
 
   // Labos
   supaGet("labos?patient_id=eq." + pid + "&select=*&order=created_at.desc", function(rows) {
-    if (!rows) return;
-    DB.labos = DB.labos || {};
-    DB.labos[pid] = rows.map(function(l){ return Object.assign({}, l, {patientId:l.patient_id, res:l.resultats||[]}); });
+    if (rows) {
+      DB.labos = DB.labos || {};
+      DB.labos[pid] = rows.map(function(l){ return Object.assign({}, l, {patientId:l.patient_id, res:l.resultats||[]}); });
+    }
+    done();
   });
 
   // Consultations
   supaGet("consultations?patient_id=eq." + pid + "&select=*&order=created_at.desc", function(rows) {
-    if (!rows) return;
-    DB.consultations = DB.consultations || {};
-    DB.consultations[pid] = rows;
+    if (rows) {
+      DB.consultations = DB.consultations || {};
+      DB.consultations[pid] = rows;
+    }
+    done();
   });
 
-  // Dossier patient (groupe sanguin, allergies, etc.)
+  // Dossier patient
   supaGet("patients?id=eq." + pid + "&select=*", function(rows) {
-    if (!rows || !rows[0]) return;
-    PAT = Object.assign({}, rows[0], {userId: rows[0].user_id});
-    DB.patients = (DB.patients || []).map(function(p){ return p.id === pid ? PAT : p; });
-    buildHeader();
+    if (rows && rows[0]) {
+      PAT = Object.assign({}, rows[0], {userId: rows[0].user_id});
+      DB.patients = (DB.patients || []).map(function(p){ return p.id === pid ? PAT : p; });
+      buildHeader();
+    }
+    done();
   });
-
-  console.log("[Mobile] Données patient rechargées depuis Supabase");
 }
 </script>
