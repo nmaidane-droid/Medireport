@@ -2304,6 +2304,7 @@ function rPatients(){
   const rows=patients.map(p=>{
     const ref=DB.users.find(x=>x.id===p.medecin_ref);
     const rdvCount=DB.rdv.filter(r=>r.patientId===p.id).length;
+    const canEdit = u.role==="admin" || p.medecin_ref===u.id;
     return `<div class="ur" style="cursor:pointer;padding:14px 16px" onclick="openDossier('${p.id}')">
       <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
       <div style="flex:1;min-width:0">
@@ -2318,6 +2319,11 @@ function rPatients(){
       <div style="text-align:right;flex-shrink:0;font-size:11px;color:var(--g400)">
         <div>👤 ${ref?(ref.titre||"Dr.")+" "+ref.nom:"—"}</div>
         <div style="margin-top:4px">📅 ${rdvCount} RDV</div>
+        ${canEdit?`<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
+          <button class="btn bp bsm" onclick="event.stopPropagation();printFicheAcces('${DB.users.find(x=>x.patientId===p.id)?.id||p.userId}')" title="Fiche accès">🖨️</button>
+          <button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button>
+          <button class="btn bd bsm" onclick="event.stopPropagation();delPatient('${p.id}')">🗑</button>
+        </div>`:""}
       </div>
     </div>`;
   }).join("");
@@ -4747,8 +4753,16 @@ function showAddPatient(){
       res.innerHTML=`<div style="background:var(--green-l);border:1px solid #86EFAC;border-radius:10px;padding:14px">
         <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ Aucun dossier existant trouvé</div>
         <div style="font-size:12px;color:var(--g600);margin-bottom:12px">Ce patient n'est pas encore dans la base. Vous pouvez créer son dossier.</div>
-        <button class="btn bp" style="width:100%" onclick="ov.remove();showCreatePatientForm('${(G("sr-pr").value||"").trim()}','${(G("sr-nm").value||"").trim()}','${G("sr-dob").value||""}','${(G("sr-cin").value||"").trim()}')">+ Créer le dossier patient</button>
+        <button class="btn bp" style="width:100%" id="sr-create-btn">+ Créer le dossier patient</button>
       </div>`;
+      document.getElementById("sr-create-btn").onclick=function(){
+        const pr=(G("sr-pr").value||"").trim();
+        const nm=(G("sr-nm").value||"").trim();
+        const dob=G("sr-dob").value||"";
+        const cin=(G("sr-cin").value||"").trim();
+        ov.remove();
+        showCreatePatientForm(pr,nm,dob,cin);
+      };
     } else {
       // Found → show matches
       const html=matches.map(p=>{
@@ -4808,31 +4822,38 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     </div>
     <div class="fr"><div class="fg"><label>Téléphone</label><input id="np-tel" placeholder="+212 6 00 00 00 00"/></div><div class="fg"><label>Ville de résidence</label><input id="np-vl" placeholder="Casablanca"/></div></div>
     <div class="fg"><label>Adresse complète</label><input id="np-adr" placeholder="Ex : 45 Avenue Hassan II, Casablanca"/></div>
-    <div class="fg"><label>Médecin référent</label><div id="np-dr-sd"></div></div>
+    <div class="fg"><label>Médecin référent</label><div style="background:var(--g50);border:1px solid var(--g200);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--g700)">${currentUser.titre||"Dr."} ${currentUser.prenom} ${currentUser.nom} <span style="font-weight:400;color:var(--g400);font-size:12px">· ${currentUser.spec||""}</span></div></div>
     <div class="fg"><label>Antécédents (virgule)</label><input id="np-ant" placeholder="HTA (2020), Diabète (2018)"/></div>
     <div class="fg"><label>Allergies (virgule)</label><input id="np-alg" placeholder="Pénicilline, Aspirine"/></div>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="np-s">Créer le patient</button></div></div>`);
 
-  const npDrSd=new SearchableDropdown("np-dr-sd",userOptions("medecin"),null,"Rechercher un médecin référent...");
-  if(currentUser.role==="medecin") npDrSd.setValue(currentUser.id);
+  // Médecin référent = créateur automatiquement
 
   ov2.querySelector("#np-s").onclick=()=>{
     const pr=document.getElementById("np-pr").value.trim();
     const nm=document.getElementById("np-nm").value.trim();
     if(!pr||!nm){alert("Prénom et nom requis");return;}
-    showConsentModal(pr, nm, ()=>{
-    const initials=(pr[0]+(nm[0]||"")).toUpperCase();
-    const colors=["#16A34A","#1A6EFF","#E53935","#F59E0B","#7C3AED","#0BA896"];
-    const color=colors[DB.patients.length%colors.length];
+    // ── Capturer TOUTES les valeurs avant que la modale soit fermée ──
     const dobVal=document.getElementById("np-dob").value;
     const dob=dobVal?new Date(dobVal).toLocaleDateString("fr-FR"):"—";
     const dobYear=dobVal?new Date(dobVal).getFullYear():0;
     const age=dobYear?new Date().getFullYear()-dobYear:0;
-    const pid=uid();
     const ant=(document.getElementById("np-ant").value||"").split(",").map(x=>x.trim()).filter(Boolean);
     const alg=(document.getElementById("np-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);
-    const drId=npDrSd.getValue();
     const grp=document.getElementById("np-gr").value;
+    const tel=document.getElementById("np-tel").value||"—";
+    const vl=document.getElementById("np-vl").value||"—";
+    const cin=document.getElementById("np-cin").value||"";
+    const lieu=document.getElementById("np-lieu").value||"";
+    const adr=document.getElementById("np-adr")?.value||"";
+    const sx=document.getElementById("np-sx").value;
+
+    showConsentModal(pr, nm, ()=>{
+    const initials=(pr[0]+(nm[0]||"")).toUpperCase();
+    const colors=["#16A34A","#1A6EFF","#E53935","#F59E0B","#7C3AED","#0BA896"];
+    const color=colors[DB.patients.length%colors.length];
+    const pid=uid();
+    const drId=currentUser.id;
 
     // ── Créer compte utilisateur patient ──
     const newPin=generatePIN();
@@ -4844,13 +4865,13 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     // ── Créer dossier patient ──
     DB.patients.push({
       id:pid, nom:nm, prenom:pr, dob, age,
-      sexe:document.getElementById("np-sx").value,
-      tel:document.getElementById("np-tel").value||"—",
+      sexe:sx,
+      tel:tel,
       email:"—",
-      ville:document.getElementById("np-vl").value||"—",
-      cin:document.getElementById("np-cin").value||"",
-      lieu_naissance:document.getElementById("np-lieu").value||"",
-      adresse:document.getElementById("np-adr")?.value||"",
+      ville:vl,
+      cin:cin,
+      lieu_naissance:lieu,
+      adresse:adr,
       groupe:grp,
       allergies:alg, antecedents:ant, pathologies:[],
       medecin_ref:drId||currentUser.id, color, initials,
@@ -5925,6 +5946,10 @@ function printFicheAcces(userId){
   const dob = p ? (p.dob||"—") : "—";
   const groupe = p ? (p.groupe||"—") : "—";
 
+  // Suspendre le timer de session pendant l'impression
+  if(sessionTimer) clearTimeout(sessionTimer);
+  window.addEventListener("focus", resetSessionTimer, {once:true});
+
   const win = window.open("","_blank","width=500,height=700");
   win.document.write(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"/>
@@ -5955,7 +5980,7 @@ h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#E
 .step-num{width:18px;height:18px;border-radius:50%;background:#1A6EFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
 .warning{background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400E;margin-bottom:20px}
 .footer{font-size:10px;color:#94A3B8;text-align:center;border-top:1px solid #F1F5F9;padding-top:14px}
-@media print{body{padding:20px}}
+@media print{body{padding:20px}@page{margin:1cm;size:A4}}
 </style></head><body>
 <div class="header">
   <div class="logo-box">
@@ -6059,6 +6084,10 @@ function generateQRToCanvas(url, canvas){
 function printFicheAccesFromData(pid, prenom, nom, login, pin, dob, groupe){
   const url = "https://medireport-kappa.vercel.app/mobile.html";
   const qrData = (()=>{ const c=document.createElement("canvas"); generateQRToCanvas(url,c); return c.toDataURL("image/png"); })();
+  // Suspendre le timer de session pendant l'impression
+  if(sessionTimer) clearTimeout(sessionTimer);
+  window.addEventListener("focus", resetSessionTimer, {once:true});
+
   const win=window.open("","_blank","width=500,height=700");
   win.document.write(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"/>
@@ -6088,7 +6117,7 @@ h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#E
 .step-num{width:18px;height:18px;border-radius:50%;background:#1A6EFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
 .warning{background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400E;margin-bottom:20px}
 .footer{font-size:10px;color:#94A3B8;text-align:center;border-top:1px solid #F1F5F9;padding-top:14px}
-@media print{body{padding:20px}}
+@media print{body{padding:20px}@page{margin:1cm;size:A4}}
 </style></head><body>
 <div class="header">
   <div class="logo-box"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="20" fill="white"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -6208,6 +6237,10 @@ function printOrdonnance(pid, ordId){
       <td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;text-align:center">${m.ren&&m.ren!=="—"?m.ren:"—"}</td>
     </tr>`).join("");
 
+  // Suspendre le timer de session pendant l'impression
+  if(sessionTimer) clearTimeout(sessionTimer);
+  window.addEventListener("focus", resetSessionTimer, {once:true});
+
   const win = window.open("","_blank","width=700,height=900");
   win.document.write(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"/>
@@ -6293,6 +6326,29 @@ th{background:#F1F5F9;padding:10px 14px;font-size:11px;font-weight:700;color:#64
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`);
   win.document.close();
+}
+
+// ── Supprimer un patient (créateur uniquement) ────────────
+function delPatient(pid){
+  if(!confirm("Supprimer définitivement ce patient et toutes ses données ?")) return;
+  DB.patients = DB.patients.filter(p=>p.id!==pid);
+  DB.access = DB.access.filter(a=>a.patientId!==pid);
+  DB.users = DB.users.filter(u=>u.patientId!==pid);
+  delete DB.consultations[pid];
+  delete DB.labos[pid];
+  delete DB.rx[pid];
+  delete DB.imagerie[pid];
+  DB.rdv = DB.rdv.filter(r=>r.patientId!==pid);
+  saveDB(DB);
+  // Supprimer dans Supabase
+  supaFetch("patients?id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("users?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("patient_access?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("prescriptions?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("consultations?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("labos?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("rdv?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  rPatients();
 }
 </script>
 </body>
