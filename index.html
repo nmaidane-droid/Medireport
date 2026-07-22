@@ -1229,7 +1229,13 @@ function uName(id){ const u=DB.users.find(x=>x.id===id); if(!u) return id; const
 function uShort(id){ const u=DB.users.find(x=>x.id===id); if(!u) return id; const titre=u.titre||"Dr."; return `${titre} ${u.nom}`; }
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function uid(){ return "x"+Math.random().toString(36).slice(2,9); }
-function generatePIN(){ return Array.from({length:6},()=>Math.floor(Math.random()*10)).join(""); }
+function generatePIN(){
+  const usedPins = new Set((DB.users||[]).map(u=>u.pin).filter(Boolean));
+  let pin;
+  do { pin = Array.from({length:6},()=>Math.floor(Math.random()*10)).join(""); }
+  while(usedPins.has(pin));
+  return pin;
+}
 
 function modal(html){
   const o=document.createElement("div");o.className="mov";o.innerHTML=html;
