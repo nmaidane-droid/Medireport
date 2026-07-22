@@ -1052,7 +1052,7 @@ async function syncChanged(changed){
     medecin:d.medecin||null, specialiste:d.specialiste||null,
     specialite:d.specialite||null, date:d.date||null,
     date_traitement:d.date_traitement||null, motif:d.motif||null,
-    statut:d.statut||"en_attente", avis:d.avis||null
+    statut:d.statut||"en_attente", avis:d.compte_rendu||d.avis||null
   }));
   else if(table==="patient_access") data = rows.map(a=>({
     patient_id:a.patientId||a.patient_id,
@@ -1424,18 +1424,18 @@ function getNotifications(){
   const myNewLabo=(DB.demandes_labo||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_labo_"+u.id)||"[]").includes(d.id));
   myNewLabo.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
-    notifs.push({type:"labo",icon:"🧪",color:"var(--green)",title:"Résultats labo disponibles",body:`${p2?p2.prenom+" "+p2.nom:"—"} — ${d.ref}`,action:()=>openDossier(d.patientId)});
+    notifs.push({type:"labo",icon:"🧪",color:"var(--green)",title:"Résultats labo disponibles",body:`Réf: ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",action:()=>openDossier(d.patientId)});
   });
   // 0b. Nouveaux avis spécialisés
   const myNewAvis=(DB.demandes_avis||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_avis_"+u.id)||"[]").includes(d.id));
   myNewAvis.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
-    notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Avis spécialisé disponible",body:`${p2?p2.prenom+" "+p2.nom:"—"} — ${d.ref} — ${d.specialite}`,action:()=>openDossier(d.patientId)});
+    notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Rapport spécialiste disponible",body:`${d.specialite} — ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",action:()=>openDossier(d.patientId)});
   });
   // 1. RDV à confirmer
   DB.rdv.filter(r=>r.s==="à confirmer"&&patients.some(p=>p.id===r.patientId)).forEach(r=>{
     const p=DB.patients.find(x=>x.id===r.patientId);
-    notifs.push({type:"rdv",icon:"📅",color:"#F59E0B",title:"RDV à confirmer",body:`${p?p.prenom+" "+p.nom:"—"} — ${r.h} le ${r.day} ${r.mo}`,action:()=>openDossier(r.patientId)});
+    notifs.push({type:"rdv",icon:"📅",color:"#F59E0B",title:"RDV à confirmer",body:`${r.h} le ${r.day} ${r.mo}`,patientId:r.patientId,patient:p?p.prenom+" "+p.nom:"—",action:()=>openDossier(r.patientId)});
   });
 
   // 2. Ordonnances à renouveler (dans les 30 jours)
@@ -1446,7 +1446,7 @@ function getNotifications(){
         const renDate=new Date(parts[2],parts[1]-1,parts[0]);
         const diffDays=Math.round((renDate-today_ms)/(1000*60*60*24));
         if(diffDays>=0&&diffDays<=30){
-          notifs.push({type:"rx",icon:"💊",color:"#7C3AED",title:"Renouvellement à venir",body:`${rx.med} — ${p.prenom} ${p.nom} (dans ${diffDays}j)`,action:()=>openDossier(p.id)});
+          notifs.push({type:"rx",icon:"💊",color:"#7C3AED",title:"Renouvellement à venir",body:`${rx.med} (dans ${diffDays}j)`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
         }
       }
     });
@@ -1459,7 +1459,7 @@ function getNotifications(){
       const last=labos[0];
       const bads=last.res.filter(r=>r.s==="bad");
       if(bads.length){
-        notifs.push({type:"labo",icon:"🧪",color:"#E53935",title:"Valeurs hors norme",body:`${p.prenom} ${p.nom} — ${bads.length} résultat(s) anormal(aux)`,action:()=>openDossier(p.id)});
+        notifs.push({type:"labo",icon:"🧪",color:"#E53935",title:"Valeurs hors norme",body:`${bads.length} résultat(s) anormal(aux)`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
       }
     }
   });
@@ -1467,13 +1467,13 @@ function getNotifications(){
   // 4. Patients dialyse — rappel séance
   if(["medecin","specialiste","admin"].includes(u.role)){
     patients.filter(p=>p.dialyse).forEach(p=>{
-      notifs.push({type:"dialyse",icon:"💧",color:"#0BA896",title:"Patient en dialyse",body:`${p.prenom} ${p.nom} — ${p.seances_semaine} séances/semaine`,action:()=>openDossier(p.id)});
+      notifs.push({type:"dialyse",icon:"💧",color:"#0BA896",title:"Patient en dialyse",body:`${p.seances_semaine} séances/semaine`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
     });
   }
 
   // 5. Allergies documentées — rappel
   patients.filter(p=>p.allergies?.length).forEach(p=>{
-    notifs.push({type:"allergie",icon:"⚠️",color:"#E53935",title:"Allergie documentée",body:`${p.prenom} ${p.nom} — ${p.allergies.join(", ")}`,action:()=>openDossier(p.id)});
+    notifs.push({type:"allergie",icon:"⚠️",color:"#E53935",title:"Allergie documentée",body:`${p.allergies.join(", ")}`,patientId:p.id,patient:p.prenom+" "+p.nom,action:()=>openDossier(p.id)});
   });
 
   return notifs;
@@ -1506,13 +1506,24 @@ function toggleNotifPanel(){
   if(!notifs.length){
     list.innerHTML=`<div style="padding:30px;text-align:center;color:var(--g400);font-size:13px">✅ Aucune notification</div>`;
   } else {
-    list.innerHTML = notifs.map((n,i)=>`
-      <div onclick="toggleNotifPanel();(${n.action.toString()})()" style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--g100);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
-        <div style="width:36px;height:36px;border-radius:50%;background:${n.color}22;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${n.icon}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--g900)">${n.title}</div>
-          <div style="font-size:12px;color:var(--g500);margin-top:2px;line-height:1.4">${n.body}</div>
-        </div>
+    // Grouper par patient
+    const byPatient = {};
+    notifs.forEach(n=>{
+      const key = n.patientId || "global";
+      if(!byPatient[key]) byPatient[key] = {patient:n.patient, notifs:[]};
+      byPatient[key].notifs.push(n);
+    });
+    list.innerHTML = Object.entries(byPatient).map(([pid, group])=>`
+      <div style="border-bottom:2px solid var(--g100)">
+        ${group.patient?`<div style="padding:8px 16px 4px;font-size:11px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;background:var(--g50)">👤 ${group.patient}</div>`:""}
+        ${group.notifs.map(n=>`
+          <div onclick="toggleNotifPanel();(${n.action.toString()})()" style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--g100)" onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
+            <div style="width:32px;height:32px;border-radius:50%;background:${n.color}22;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${n.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:var(--g900)">${n.title}</div>
+              <div style="font-size:12px;color:var(--g500);margin-top:1px;line-height:1.4">${n.body}</div>
+            </div>
+          </div>`).join("")}
       </div>`).join("");
   }
   panel.style.display = "flex";
@@ -2185,6 +2196,18 @@ function rDashboard(){
     const dialyseInfo=p.dialyse?`<div style="background:rgba(11,168,150,.2);border:1px solid rgba(11,168,150,.4);border-radius:8px;padding:8px 14px;margin-top:10px;font-size:12px;color:#0BA896">💧 Hémodialyse · ${p.seances_semaine} séances/semaine · ${p.type_acces||""}</div>`:"";
     statsHtml=`<div class="dv-header"><div class="dv-av">${p.initials||"?"}</div><div><div class="dv-name">${p.prenom||""} ${p.nom||""}</div><div class="dv-meta">${p.age||""} ans · ${p.groupe||""} · ${p.ville||""}</div><div class="dv-tags">${(p.pathologies||[]).map(x=>`<span class="dv-tag">${x}</span>`).join("")}${(p.allergies||[]).map(x=>`<span class="dv-tag dv-tag-red">⚠ ${x}</span>`).join("")}</div>${dialyseInfo}</div></div>`;
   } else {
+    // Recharger les demandes d'avis depuis Supabase
+    supaFetch("demandes_avis?specialiste=eq."+u.id+"&select=*&order=created_at.desc").then(rows=>{
+      if(rows&&rows.length){
+        if(!DB.demandes_avis) DB.demandes_avis=[];
+        rows.forEach(d=>{
+          const mapped=Object.assign({},d,{patientId:d.patient_id});
+          const idx=DB.demandes_avis.findIndex(x=>x.id===d.id);
+          if(idx>=0) DB.demandes_avis[idx]=mapped; else DB.demandes_avis.push(mapped);
+        });
+        rDashboard(); // Rafraîchir
+      }
+    }).catch(()=>{});
     const myDemAvis = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="en_attente");
     const myDemAvisDone = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="traite");
     statsHtml=`<div class="g4" style="margin-bottom:20px">
@@ -2415,7 +2438,7 @@ function rDossier(){
         <div style="margin-top:6px">${p.consentement?`<span style="background:rgba(22,163,74,.2);color:#86efac;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">✓ Consentement recueilli le ${p.consentement.date}</span>`:`<span style="background:rgba(229,57,53,.2);color:#fca5a5;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">⚠ Consentement manquant</span>`}</div><div class="dv-tags">${p.pathologies?.map(x=>`<span class="dv-tag">${x}</span>`).join("")||""}${p.allergies?.map(x=>`<span class="dv-tag dv-tag-red">⚠ ${x}</span>`).join("")||""}${p.dialyse?`<span class="dv-tag" style="background:rgba(11,168,150,.3)">💧 Hémodialyse ${p.seances_semaine}×/sem</span>`:""}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px">Médecin référent</div><div style="font-size:13px;font-weight:700;color:#fff">${titre}${ref?ref.prenom+" "+ref.nom:"—"}</div><div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${ref?.spec||""}</div></div></div>
     <div class="dv-tabs">${tabsHtml}</div>
     ${(canConsult&&["medecin","specialiste"].includes(u.role))?`<div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0">
-      <button class="btn bs bsm" onclick="showDemandeAvisModal('${p.id}', d=>{DB.demandes_avis.push(d);saveDB(DB);})" title="Demande d'avis spécialisé">❤️ Avis spécialisé</button>
+      <button class="btn bs bsm" onclick="showDemandeAvisModal('${p.id}', d=>{DB.demandes_avis.push(d);saveDB(DB,{table:'demandes_avis',rows:[Object.assign({},d,{patient_id:d.patientId})]});})" title="Demande d'avis spécialisé">❤️ Avis spécialisé</button>
     </div>`:""}
     <div id="dossier-content"></div>`;
   renderDossierTab();
@@ -2904,7 +2927,11 @@ function showSaisieAvis(demandeId){
       timestamp: new Date().toISOString()
     });
 
-    saveDB(DB);
+    // Sync vers Supabase
+    saveDB(DB, {table:"demandes_avis", rows:[d]});
+    // Sync consultation vers Supabase
+    const newCons = DB.consultations[d.patientId][0];
+    if(newCons) syncChanged({table:"consultations", rows:[Object.assign({},newCons,{patient_id:d.patientId})]}).catch(()=>{});
     ov.remove();
     alert("✅ Compte rendu envoyé et ajouté au dossier du patient.");
     renderPage();
@@ -5261,7 +5288,27 @@ function printDemandeDoc(type, demande){
       ${demande.docs?`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:16px">
         <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Documents joints</div>
         <div style="font-size:13px;color:#334155">${demande.docs}</div>
-      </div>`:""}`;
+      </div>`:""}
+
+      ${(()=>{
+        // Résumé du dossier médical
+        const ant = (p?.antecedents||[]);
+        const alg = (p?.allergies||[]);
+        const rxActifs = (DB.rx[demande.patientId]||[]).filter(r=>r.s==="active");
+        const lastLabo = (DB.labos[demande.patientId]||[])[0];
+        const lastBads = lastLabo ? lastLabo.res.filter(r=>r.s==="bad") : [];
+        let resume = "";
+        if(ant.length||alg.length||rxActifs.length||lastBads.length){
+          resume += `<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:800;color:#1a1a2e;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px">📋 Résumé du dossier médical</div>`;
+          if(ant.length) resume += `<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Antécédents : </span><span style="font-size:12px;color:#334155">${ant.join(", ")}</span></div>`;
+          if(alg.length) resume += `<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:700;color:#E53935;text-transform:uppercase">⚠ Allergies : </span><span style="font-size:12px;color:#E53935;font-weight:600">${alg.join(", ")}</span></div>`;
+          if(rxActifs.length) resume += `<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Traitements actifs : </span><span style="font-size:12px;color:#334155">${rxActifs.map(r=>r.med+" "+r.dos).join(", ")}</span></div>`;
+          if(lastBads.length) resume += `<div><span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Derniers résultats anormaux (${lastLabo.date}) : </span><span style="font-size:12px;color:#E53935">${lastBads.map(r=>r.p+": "+r.v+" "+r.u).join(", ")}</span></div>`;
+          resume += `</div>`;
+        }
+        return resume;
+      })()}`;
   }
 
   const titleDoc = type==="labo" ? "DEMANDE D'ANALYSES BIOLOGIQUES" : "DEMANDE D'AVIS SPÉCIALISÉ";
