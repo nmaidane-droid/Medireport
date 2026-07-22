@@ -2328,7 +2328,7 @@ function rPatients(){
     </div>`;
   }).join("");
 
-  G("pg-patients").innerHTML=`${backBtn()}
+  G("pg-patients").innerHTML=`
     <div class="sec-hd">
       <div><div class="sec-tit">Patients (${patients.length})</div><div class="sec-sub">Classés par ordre alphabétique</div></div>
       ${isAdmin?`<button class="btn bp" onclick="showAddPatient()">+ Nouveau patient</button>`:""}
@@ -2356,6 +2356,7 @@ function filterPatients(q){
   const rows=patients.map(p=>{
     const ref=DB.users.find(x=>x.id===p.medecin_ref);
     const rdvCount=DB.rdv.filter(r=>r.patientId===p.id).length;
+    const canEdit2 = u.role==="admin" || p.medecin_ref===u.id;
     return `<div class="ur" style="cursor:pointer;padding:14px 16px" onclick="openDossier('${p.id}')">
       <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
       <div style="flex:1;min-width:0">
@@ -2370,6 +2371,11 @@ function filterPatients(q){
       <div style="text-align:right;flex-shrink:0;font-size:11px;color:var(--g400)">
         <div>👤 ${ref?(ref.titre||"Dr.")+" "+ref.nom:"—"}</div>
         <div style="margin-top:4px">📅 ${rdvCount} RDV</div>
+        ${canEdit2?`<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
+          <button class="btn bp bsm" onclick="event.stopPropagation();printFicheAcces('${DB.users.find(x=>x.patientId===p.id)?.id||p.userId}')" title="Fiche accès">🖨️</button>
+          <button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button>
+          <button class="btn bd bsm" onclick="event.stopPropagation();delPatient('${p.id}')">🗑</button>
+        </div>`:""}
       </div>
     </div>`;
   }).join("");
@@ -4810,21 +4816,22 @@ async function demanderAcces(patientId, ov){
 
 function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
   const ov2=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouveau dossier patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
-    <div class="fr"><div class="fg"><label>Prénom</label><input id="np-pr" value="${prePr}" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="np-nm" value="${preNm}" placeholder="Nom"/></div></div>
+    <div class="fr"><div class="fg"><label>Prénom <span style="color:var(--red)">*</span></label><input id="np-pr" value="${prePr}"/></div><div class="fg"><label>Nom <span style="color:var(--red)">*</span></label><input id="np-nm" value="${preNm}"/></div></div>
     <div class="fr3">
-      <div class="fg"><label>Date de naissance</label><input id="np-dob" type="date" value="${preDob}"/></div>
-      <div class="fg"><label>Sexe</label><select id="np-sx"><option value="M">Homme</option><option value="F">Femme</option></select></div>
-      <div class="fg"><label>Groupe sanguin</label><select id="np-gr"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label><input id="np-dob" type="date" value="${preDob}"/></div>
+      <div class="fg"><label>Sexe <span style="color:var(--red)">*</span></label><select id="np-sx"><option value="">— Choisir —</option><option value="M">Homme</option><option value="F">Femme</option></select></div>
+      <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="np-gr"><option value="">— Inconnu —</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
     </div>
     <div class="fr">
-      <div class="fg"><label>CIN</label><input id="np-cin" value="${preCin}" placeholder="Ex : AB123456"/></div>
-      <div class="fg"><label>Lieu de naissance</label><input id="np-lieu" placeholder="Ex : Casablanca"/></div>
+      <div class="fg"><label>CIN <span style="color:var(--red)">*</span></label><input id="np-cin" value="${preCin}"/></div>
+      <div class="fg"><label>Lieu de naissance <span style="color:var(--red)">*</span></label><input id="np-lieu"/></div>
     </div>
-    <div class="fr"><div class="fg"><label>Téléphone</label><input id="np-tel" placeholder="+212 6 00 00 00 00"/></div><div class="fg"><label>Ville de résidence</label><input id="np-vl" placeholder="Casablanca"/></div></div>
-    <div class="fg"><label>Adresse complète</label><input id="np-adr" placeholder="Ex : 45 Avenue Hassan II, Casablanca"/></div>
+    <div class="fr"><div class="fg"><label>Téléphone <span style="color:var(--red)">*</span></label><input id="np-tel"/></div><div class="fg"><label>Ville <span style="color:var(--red)">*</span></label><input id="np-vl"/></div></div>
+    <div class="fg"><label>Adresse <span style="color:var(--red)">*</span></label><input id="np-adr"/></div>
     <div class="fg"><label>Médecin référent</label><div style="background:var(--g50);border:1px solid var(--g200);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--g700)">${currentUser.titre||"Dr."} ${currentUser.prenom} ${currentUser.nom} <span style="font-weight:400;color:var(--g400);font-size:12px">· ${currentUser.spec||""}</span></div></div>
-    <div class="fg"><label>Antécédents (virgule)</label><input id="np-ant" placeholder="HTA (2020), Diabète (2018)"/></div>
-    <div class="fg"><label>Allergies (virgule)</label><input id="np-alg" placeholder="Pénicilline, Aspirine"/></div>
+    <div class="fg"><label>Antécédents <span style="font-size:11px;color:var(--g400)">(optionnel — séparés par virgule)</span></label><input id="np-ant"/></div>
+    <div class="fg"><label>Allergies <span style="font-size:11px;color:var(--g400)">(optionnel — séparés par virgule)</span></label><input id="np-alg"/></div>
+    <div id="np-err" style="color:var(--red);font-size:12px;font-weight:700;margin-top:8px"></div>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="np-s">Créer le patient</button></div></div>`);
 
   // Médecin référent = créateur automatiquement
@@ -4832,9 +4839,29 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
   ov2.querySelector("#np-s").onclick=()=>{
     const pr=document.getElementById("np-pr").value.trim();
     const nm=document.getElementById("np-nm").value.trim();
-    if(!pr||!nm){alert("Prénom et nom requis");return;}
-    // ── Capturer TOUTES les valeurs avant que la modale soit fermée ──
+    const errEl=document.getElementById("np-err");
+
+    // ── Validation des champs obligatoires ──
+    const missing=[];
+    if(!pr) missing.push("Prénom");
+    if(!nm) missing.push("Nom");
     const dobVal=document.getElementById("np-dob").value;
+    if(!dobVal) missing.push("Date de naissance");
+    if(!document.getElementById("np-sx").value) missing.push("Sexe");
+    if(!document.getElementById("np-gr").value) missing.push("Groupe sanguin");
+    if(!document.getElementById("np-cin").value.trim()) missing.push("CIN");
+    if(!document.getElementById("np-lieu").value.trim()) missing.push("Lieu de naissance");
+    if(!document.getElementById("np-tel").value.trim()) missing.push("Téléphone");
+    if(!document.getElementById("np-vl").value.trim()) missing.push("Ville");
+    if(!document.getElementById("np-adr").value.trim()) missing.push("Adresse");
+
+    if(missing.length){
+      if(errEl) errEl.textContent="Champs obligatoires manquants : "+missing.join(", ");
+      return;
+    }
+    if(errEl) errEl.textContent="";
+
+    // ── Capturer TOUTES les valeurs avant que la modale soit fermée ──
     const dob=dobVal?new Date(dobVal).toLocaleDateString("fr-FR"):"—";
     const dobYear=dobVal?new Date(dobVal).getFullYear():0;
     const age=dobYear?new Date().getFullYear()-dobYear:0;
@@ -4897,7 +4924,59 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
 }
 
 
-function showEditPatient(pid){const p=DB.patients.find(x=>x.id===pid);if(!p)return;const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Modifier — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Téléphone</label><input id="ep-tel" value="${p.tel||""}"/></div><div class="fg"><label>Ville</label><input id="ep-vl" value="${p.ville||""}"/></div></div><div class="fg"><label>Médecin référent</label><div id="ep-dr-sd"></div></div><div class="fg"><label>Pathologies (virgule)</label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div><div class="fg"><label>Allergies (virgule)</label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);const epDrSd=new SearchableDropdown("ep-dr-sd",userOptions("medecin"),null,"Rechercher un médecin référent...");epDrSd.setValue(p.medecin_ref||"");ov.querySelector("#ep-s").onclick=()=>{p.tel=G("ep-tel").value||"—";p.ville=G("ep-vl").value||"—";p.pathologies=(G("ep-path").value||"").split(",").map(x=>x.trim()).filter(Boolean);p.allergies=(G("ep-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);const newDr=epDrSd.getValue();if(newDr&&newDr!==p.medecin_ref){DB.access=DB.access.filter(a=>!(a.patientId===pid&&a.type==="medecin_ref"));DB.access.push({id:uid(),patientId:pid,userId:newDr,type:"medecin_ref",date:today(),modules:["all"]});p.medecin_ref=newDr;}saveDB(DB,{table:"patients",rows:[p]});ov.remove();rAdmin();};}
+function showEditPatient(pid){
+  const p=DB.patients.find(x=>x.id===pid);if(!p)return;
+  const dobISO=p.dob&&p.dob!=="—"?p.dob.split("/").reverse().join("-"):"";
+  const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Modifier — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div class="fr"><div class="fg"><label>Prénom <span style="color:var(--red)">*</span></label><input id="ep-pr" value="${p.prenom||""}"/></div><div class="fg"><label>Nom <span style="color:var(--red)">*</span></label><input id="ep-nm" value="${p.nom||""}"/></div></div>
+    <div class="fr3">
+      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label><input id="ep-dob" type="date" value="${dobISO}"/></div>
+      <div class="fg"><label>Sexe <span style="color:var(--red)">*</span></label><select id="ep-sx"><option value="">— Choisir —</option><option value="M"${p.sexe==="M"?" selected":""}>Homme</option><option value="F"${p.sexe==="F"?" selected":""}>Femme</option></select></div>
+      <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="ep-gr"><option value="">— Inconnu —</option><option${p.groupe==="A+"?" selected":""}>A+</option><option${p.groupe==="A-"?" selected":""}>A-</option><option${p.groupe==="B+"?" selected":""}>B+</option><option${p.groupe==="B-"?" selected":""}>B-</option><option${p.groupe==="AB+"?" selected":""}>AB+</option><option${p.groupe==="AB-"?" selected":""}>AB-</option><option${p.groupe==="O+"?" selected":""}>O+</option><option${p.groupe==="O-"?" selected":""}>O-</option></select></div>
+    </div>
+    <div class="fr"><div class="fg"><label>CIN <span style="color:var(--red)">*</span></label><input id="ep-cin" value="${p.cin||""}"/></div><div class="fg"><label>Téléphone <span style="color:var(--red)">*</span></label><input id="ep-tel" value="${p.tel&&p.tel!=="—"?p.tel:""}"/></div></div>
+    <div class="fr"><div class="fg"><label>Ville <span style="color:var(--red)">*</span></label><input id="ep-vl" value="${p.ville&&p.ville!=="—"?p.ville:""}"/></div><div class="fg"><label>Lieu de naissance <span style="color:var(--red)">*</span></label><input id="ep-lieu" value="${p.lieu_naissance||""}"/></div></div>
+    <div class="fg"><label>Adresse <span style="color:var(--red)">*</span></label><input id="ep-adr" value="${p.adresse||""}"/></div>
+    <div class="fg"><label>Antécédents <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-ant" value="${(p.antecedents||[]).join(", ")}"/></div>
+    <div class="fg"><label>Pathologies <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div>
+    <div class="fg"><label>Allergies <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div>
+    <div id="ep-err" style="color:var(--red);font-size:12px;font-weight:700;margin-top:8px"></div>
+  </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);
+  ov.querySelector("#ep-s").onclick=()=>{
+    const epErr=document.getElementById("ep-err");
+    const epMissing=[];
+    if(!G("ep-pr").value.trim()) epMissing.push("Prénom");
+    if(!G("ep-nm").value.trim()) epMissing.push("Nom");
+    if(!G("ep-dob").value) epMissing.push("Date de naissance");
+    if(!G("ep-sx").value) epMissing.push("Sexe");
+    if(!G("ep-gr").value) epMissing.push("Groupe sanguin");
+    if(!G("ep-cin").value.trim()) epMissing.push("CIN");
+    if(!G("ep-tel").value.trim()) epMissing.push("Téléphone");
+    if(!G("ep-vl").value.trim()) epMissing.push("Ville");
+    if(!G("ep-lieu").value.trim()) epMissing.push("Lieu de naissance");
+    if(!G("ep-adr").value.trim()) epMissing.push("Adresse");
+    if(epMissing.length){if(epErr)epErr.textContent="Champs obligatoires manquants : "+epMissing.join(", ");return;}
+    if(epErr)epErr.textContent="";
+    p.prenom=G("ep-pr").value||p.prenom;
+    p.nom=G("ep-nm").value||p.nom;
+    p.initials=(p.prenom[0]+(p.nom[0]||"")).toUpperCase();
+    const dobVal=G("ep-dob").value;
+    if(dobVal){p.dob=new Date(dobVal).toLocaleDateString("fr-FR");p.age=new Date().getFullYear()-new Date(dobVal).getFullYear();}
+    p.sexe=G("ep-sx").value;
+    p.groupe=G("ep-gr").value;
+    p.cin=G("ep-cin").value||"";
+    p.tel=G("ep-tel").value||"—";
+    p.ville=G("ep-vl").value||"—";
+    p.lieu_naissance=G("ep-lieu").value||"";
+    p.adresse=G("ep-adr").value||"";
+    p.antecedents=(G("ep-ant").value||"").split(",").map(x=>x.trim()).filter(Boolean);
+    p.pathologies=(G("ep-path").value||"").split(",").map(x=>x.trim()).filter(Boolean);
+    p.allergies=(G("ep-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);
+    saveDB(DB,{table:"patients",rows:[p]});
+    ov.remove();
+    rPatients();
+  };
+}
 
 // ══════════════════════════════════════════════════════════
 //  INIT
