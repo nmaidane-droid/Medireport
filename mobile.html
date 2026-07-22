@@ -207,6 +207,72 @@ function login() {
   buildHeader();
   showTab("syn");
   resetTimer();
+
+  // ── Niveau 3 : Realtime WebSocket ──
+  startRealtimeMobile();
+}
+
+function startRealtimeMobile() {
+  if (window._mobileWS) { try { window._mobileWS.close(); } catch(e){} }
+  var wsUrl = SUPA_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
+  var ws = new WebSocket(wsUrl);
+  window._mobileWS = ws;
+
+  ws.onopen = function() {
+    var tables = ["prescriptions","rdv","labos","consultations"];
+    tables.forEach(function(table, i) {
+      setTimeout(function() {
+        ws.send(JSON.stringify({
+          topic: "realtime:public:" + table,
+          event: "phx_join",
+          payload: {config:{broadcast:{self:false},presence:{key:""},postgres_changes:[{event:"*",schema:"public",table:table,filter:"patient_id=eq."+PAT.id}]}},
+          ref: String(i+1)
+        }));
+      }, i * 200);
+    });
+    console.log("[Mobile Realtime] Connecte");
+  };
+
+  ws.onmessage = function(e) {
+    try {
+      var msg = JSON.parse(e.data);
+      if (msg.event !== "postgres_changes") return;
+      var data = msg.payload && msg.payload.data ? msg.payload.data : {};
+      var table = data.table, eventType = data.eventType, newRow = data.new;
+      if (!table || !newRow) return;
+      console.log("[Mobile Realtime]", eventType, table);
+
+      if (table === "prescriptions") {
+        if (!DB.rx[PAT.id]) DB.rx[PAT.id] = [];
+        var idx = DB.rx[PAT.id].findIndex(function(r){ return r.id === newRow.id; });
+        var mapped = Object.assign({},newRow,{patientId:newRow.patient_id,s:newRow.statut,ren:newRow.renouvellement,ord:newRow.ordonnance});
+        if (idx >= 0) DB.rx[PAT.id][idx] = mapped; else DB.rx[PAT.id].unshift(mapped);
+      } else if (table === "rdv") {
+        var ri = DB.rdv.findIndex(function(r){ return r.id === newRow.id; });
+        var rm = Object.assign({},newRow,{patientId:newRow.patient_id,s:newRow.statut,c:newRow.color});
+        if (ri >= 0) DB.rdv[ri] = rm; else DB.rdv.unshift(rm);
+      } else if (table === "labos") {
+        if (!DB.labos[PAT.id]) DB.labos[PAT.id] = [];
+        var li = DB.labos[PAT.id].findIndex(function(l){ return l.id === newRow.id; });
+        var lm = Object.assign({},newRow,{patientId:newRow.patient_id,res:newRow.resultats||[]});
+        if (li >= 0) DB.labos[PAT.id][li] = lm; else DB.labos[PAT.id].unshift(lm);
+      } else if (table === "consultations") {
+        if (!DB.consultations) DB.consultations = {};
+        if (!DB.consultations[PAT.id]) DB.consultations[PAT.id] = [];
+        var ci = DB.consultations[PAT.id].findIndex(function(c){ return c.id === newRow.id; });
+        if (ci >= 0) DB.consultations[PAT.id][ci] = newRow; else DB.consultations[PAT.id].unshift(newRow);
+      }
+      // Rafraichir l onglet en cours
+      var activeTab = document.querySelector(".tab.on");
+      if (activeTab) activeTab.click();
+    } catch(err) { console.warn("[Mobile Realtime] error:", err); }
+  };
+
+  ws.onerror = function() { console.warn("[Mobile Realtime] Erreur"); };
+  ws.onclose = function() {
+    console.warn("[Mobile Realtime] Deconnecte - reconnexion 30s");
+    if (USR) setTimeout(startRealtimeMobile, 30000);
+  };
 }
 
 function flash() {

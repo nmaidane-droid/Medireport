@@ -968,11 +968,104 @@ function loadDBLocal(){
   };
 }
 
-function saveDB(db){
+function saveDB(db, changed){
   // Cache local
   try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
-  // Sync Supabase en arrière-plan
-  syncToSupabase(db);
+  // Sync Supabase ciblée en arrière-plan
+  if(changed) syncChanged(changed).catch(e=>console.warn("[Supabase] sync error:",e));
+  else syncToSupabase(db).catch(e=>console.warn("[Supabase] full sync error:",e)); // fallback full sync
+}
+
+// ── Niveau 1 : Upsert ciblé ───────────────────────────────
+// Usage: saveDB(DB, {table:"rdv", rows:[{...}]})
+//    ou: saveDB(DB, {table:"patients", rows:[{...}]})
+async function syncChanged(changed){
+  if(!changed||!changed.table||!changed.rows||!changed.rows.length) return;
+  const {table, rows, conflict} = changed;
+
+  // Mapper les champs selon la table
+  let data = rows;
+  if(table==="rdv") data = rows.map(r=>({
+    id:r.id, patient_id:r.patientId||r.patient_id,
+    day:r.day||null, mo:r.mo||null, h:r.h||null,
+    dr:r.dr||null, spec:r.spec||null, lieu:r.lieu||null,
+    motif:r.motif||null, statut:r.s||r.statut||"à confirmer",
+    color:r.c||r.color||null
+  }));
+  else if(table==="patients") data = rows.map(p=>({
+    id:p.id, nom:p.nom, prenom:p.prenom, dob:p.dob||null, age:p.age||null,
+    sexe:p.sexe||null, groupe:p.groupe||null, cin:p.cin||null,
+    lieu_naissance:p.lieu_naissance||null, adresse:p.adresse||null,
+    ville:p.ville||null, tel:p.tel||null, email:p.email||null,
+    allergies:p.allergies||[], antecedents:p.antecedents||[],
+    pathologies:p.pathologies||[], medecin_ref:p.medecin_ref||null,
+    color:p.color||"#1A6EFF", initials:p.initials||null,
+    dialyse:p.dialyse||false, seances_semaine:p.seances_semaine||null,
+    type_acces:p.type_acces||null, consentement:p.consentement||null,
+    user_id:p.userId||p.user_id||null
+  }));
+  else if(table==="users") data = rows.map(u=>({
+    id:u.id, nom:u.nom, prenom:u.prenom||"", role:u.role,
+    titre:u.titre||null, spec:u.spec||null, structure:u.structure||null,
+    adresse:u.adresse||null, tel_pro:u.tel_pro||null, ville:u.ville||null,
+    email:u.email||null, color:u.color||"#1A6EFF", initials:u.initials||null,
+    pin:u.pin||"000000", login:u.login, patient_id:u.patientId||null
+  }));
+  else if(table==="consultations") data = rows.map(c=>({
+    id:c.id, patient_id:c.patientId||c.patient_id, date:c.date||null,
+    dr:c.dr||null, spec:c.spec||null, motif:c.motif||null, cr:c.cr||null,
+    tags:c.tags||[], statut:c.statut||null, sc:c.sc||null
+  }));
+  else if(table==="prescriptions") data = rows.map(rx=>({
+    id:rx.id, patient_id:rx.patientId||rx.patient_id,
+    med:rx.med||null, dos:rx.dos||null, pos:rx.pos||null,
+    ind:rx.ind||null, dr:rx.dr||null, date:rx.date||null,
+    statut:rx.s||rx.statut||"active",
+    renouvellement:rx.ren||rx.renouvellement||null,
+    ordonnance:rx.ord||rx.ordonnance||null
+  }));
+  else if(table==="labos") data = rows.map(l=>({
+    id:l.id, patient_id:l.patientId||l.patient_id, date:l.date||null,
+    labo:typeof l.labo==="string"?l.labo:null,
+    ref:l.ref||null, commentaire:l.commentaire||null,
+    resultats:l.res||l.resultats||[]
+  }));
+  else if(table==="imagerie") data = rows.map(img=>({
+    id:img.id, patient_id:img.patientId||img.patient_id, date:img.date||null,
+    type:img.type||null,
+    centre:typeof img.centre==="string"?img.centre:null,
+    dr_demandeur:img.dr_demandeur||img.presc||null,
+    indication:img.indication||null, resultat:img.res||img.resultat||null,
+    conclusion:img.conclusion||img.cr||null
+  }));
+  else if(table==="demandes_labo") data = rows.map(d=>({
+    id:d.id, patient_id:d.patientId||d.patient_id,
+    medecin:d.medecin||null, labo:d.labo||null,
+    date:d.date||null, date_traitement:d.date_traitement||null,
+    analyses:d.analyses||[], statut:d.statut||"en_attente",
+    ref:d.ref||null, resultats:d.resultats||[]
+  }));
+  else if(table==="demandes_avis") data = rows.map(d=>({
+    id:d.id, patient_id:d.patientId||d.patient_id,
+    medecin:d.medecin||null, specialiste:d.specialiste||null,
+    specialite:d.specialite||null, date:d.date||null,
+    date_traitement:d.date_traitement||null, motif:d.motif||null,
+    statut:d.statut||"en_attente", avis:d.avis||null
+  }));
+  else if(table==="patient_access") data = rows.map(a=>({
+    patient_id:a.patientId||a.patient_id,
+    user_id:a.userId||a.user_id,
+    type:a.type||"suivi", modules:a.modules||["all"],
+    motif:a.motif||null, date:a.date||null
+  }));
+
+  const onConflict = conflict || (table==="patient_access"?"patient_id,user_id":"id");
+  await supaFetch(table+"?on_conflict="+onConflict, {
+    method:"POST",
+    prefer:"resolution=merge-duplicates,return=minimal",
+    body:JSON.stringify(data)
+  });
+  console.log("[Supabase] ✓ sync",table,"(",data.length,"rows)");
 }
 
 async function syncToSupabase(db){
@@ -1292,6 +1385,8 @@ function doLogin(){
     currentPage=ROLE_CFG[currentUser.role].nav[0];
     resetSessionTimer();
     buildSidebar(); renderPage();
+    startRealtimePro(); // Niveau 3 : Realtime
+
     setTimeout(()=>{
       checkBackupReminder();
       const lastB = localStorage.getItem("medirecord_last_backup");
@@ -3941,7 +4036,7 @@ function showAddConsult(pid){
       statut: stMap[st], sc: st
     });
 
-    saveDB(DB); ov.remove(); dConsultations();
+    saveDB(DB,{table:"consultations",rows:DB.consultations[currentPatient?.id||""]}); ov.remove(); dConsultations();
   };
 }
 
@@ -4266,11 +4361,11 @@ function showAddRx(pid){
   const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouvelle ordonnance</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div style="background:var(--blue-l);border:1px solid #BFDBFE;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--blue-d)"><strong>📋 Ordonnance du ${today()}</strong> · ${currentUser.titre||"Dr."} ${currentUser.nom} · ${currentUser.spec||""}</div><div class="fr"><div class="fg"><label>Date de renouvellement</label><input id="rx-ren" type="date"/></div><div class="fg"><label>Statut</label><select id="rx-st"><option value="active">Actif</option><option value="stopped">Arrêté</option></select></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px"><div style="font-size:12px;font-weight:700;color:var(--g700)">Médicaments prescrits</div><button class="btn bs bsm" id="rx-add-med">+ Ajouter</button></div><div id="rx-meds-container"></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="rx-s">Enregistrer l'ordonnance</button></div></div>`);
   const container=ov.querySelector("#rx-meds-container");addMedRow(container,0);
   ov.querySelector("#rx-add-med").onclick=()=>{addMedRow(container,container.querySelectorAll(".rx-med-row").length);};
-  ov.querySelector("#rx-s").onclick=()=>{const ren=G("rx-ren").value?new Date(G("rx-ren").value).toLocaleDateString("fr-FR"):"—";const st=G("rx-st").value;if(!DB.rx[pid])DB.rx[pid]=[];let added=0;container.querySelectorAll(".rx-med-row").forEach(row=>{const m=row.querySelector(".rx-m").value.trim();if(m){DB.rx[pid].unshift({id:uid(),med:m,dos:row.querySelector(".rx-d").value||"—",pos:row.querySelector(".rx-p").value||"—",ind:row.querySelector(".rx-i").value||"—",dr:currentUser.id,date:today(),s:st,ren,ord:ordId});added++;}});if(!added){alert("Ajoutez au moins un médicament.");return;}saveDB(DB);ov.remove();rxTab="active";dRx();};
+  ov.querySelector("#rx-s").onclick=()=>{const ren=G("rx-ren").value?new Date(G("rx-ren").value).toLocaleDateString("fr-FR"):"—";const st=G("rx-st").value;if(!DB.rx[pid])DB.rx[pid]=[];let added=0;container.querySelectorAll(".rx-med-row").forEach(row=>{const m=row.querySelector(".rx-m").value.trim();if(m){DB.rx[pid].unshift({id:uid(),med:m,dos:row.querySelector(".rx-d").value||"—",pos:row.querySelector(".rx-p").value||"—",ind:row.querySelector(".rx-i").value||"—",dr:currentUser.id,date:today(),s:st,ren,ord:ordId});added++;}});if(!added){alert("Ajoutez au moins un médicament.");return;}saveDB(DB,{table:"prescriptions",rows:DB.rx[pid]||[]});ov.remove();rxTab="active";dRx();};
 }
 
 function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=DB.rdv.filter(r=>r.patientId===p.id);const conf=rdvs.filter(r=>r.s==="confirmé"),pend=rdvs.filter(r=>r.s==="à confirmer");const card=r=>`<div class="rdvi"><div class="rdvd" style="background:${r.c}"><div class="rdvday">${r.day}</div><div class="rdvmo">${r.mo}</div></div><div style="flex:1"><div style="font-size:14px;font-weight:800;color:var(--g900);margin-bottom:3px">${uName(r.dr)}</div><div style="font-size:12px;color:var(--g500);margin-bottom:4px">🕐 ${r.h} · ${r.spec}</div><div style="font-size:12px;color:var(--g600);margin-bottom:6px">${r.motif}</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${bdg("✓ Confirmé","bgn")}<span style="font-size:11px;color:var(--g400)">📍 ${r.lieu}</span><button class="btn bs bsm" onclick="printConvocation('${p.id}',r)" title="Imprimer convocation">🖨</button><button class="btn bd bsm" onclick="delRdv('${r.id}','${p.id}')">Supprimer</button></div></div></div>`;G("dossier-content").innerHTML=`<div style="margin-bottom:16px;display:flex;justify-content:flex-end"><button class="btn bp" onclick="showAddRdv('${p.id}')">+ Planifier un RDV</button></div>${conf.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Confirmés (${conf.length})</div>${conf.map(card).join("")}`:""} ${pend.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 10px">À confirmer (${pend.length})</div>${pend.map(card).join("")}`:""}${!rdvs.length?`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucun rendez-vous</div>`:""}`;}
-function confirmRdv(id){const r=DB.rdv.find(x=>x.id===id);if(r)r.s="confirmé";saveDB(DB);dRdv();}
+function confirmRdv(id){const r=DB.rdv.find(x=>x.id===id);if(r)r.s="confirmé";saveDB(DB,{table:"rdv",rows:[r]});dRdv();}
 function delRdv(id,pid){DB.rdv=DB.rdv.filter(r=>r.id!==id);saveDB(DB);dRdv();}
 
 function showAddRdv(pid){
@@ -4413,7 +4508,7 @@ function dAccesPat(){
 
 function delAccess(aid,pid){DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);dAccesPat();}
 
-function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label><input id="ac-ex" type="date"/></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){alert("Sélectionnez un utilisateur");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;DB.access.push({id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""});saveDB(DB);ov.remove();dAccesPat();};}
+function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label><input id="ac-ex" type="date"/></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){alert("Sélectionnez un utilisateur");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;const newAcc={id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""};DB.access.push(newAcc);saveDB(DB,{table:"patient_access",rows:[newAcc]});ov.remove();dAccesPat();};}
 
 function rAgenda(){
   const u=currentUser;
@@ -4513,7 +4608,7 @@ function showEditUser(uid2){
   <div id="eu-pin-disp" style="font-size:12px;color:var(--green);font-weight:700;margin-top:4px"></div>
   <div style="font-size:11px;color:var(--g400);margin-top:3px">Communiquez le nouveau PIN à l'utilisateur</div>
 </div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="eu-s">Enregistrer</button></div></div>`);
-  ov.querySelector("#eu-s").onclick=()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin)u.pin=newPin;saveDB(DB);ov.remove();rUsers();};
+  ov.querySelector("#eu-s").onclick=()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin)u.pin=newPin;saveDB(DB,{table:"users",rows:[u]});ov.remove();rUsers();};
 }
 function delUser(uid2){if(!confirm("Supprimer ?"))return;DB.users=DB.users.filter(u=>u.id!==uid2);DB.access=DB.access.filter(a=>a.userId!==uid2);saveDB(DB);rUsers();}
 
@@ -4718,7 +4813,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
 }
 
 
-function showEditPatient(pid){const p=DB.patients.find(x=>x.id===pid);if(!p)return;const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Modifier — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Téléphone</label><input id="ep-tel" value="${p.tel||""}"/></div><div class="fg"><label>Ville</label><input id="ep-vl" value="${p.ville||""}"/></div></div><div class="fg"><label>Médecin référent</label><div id="ep-dr-sd"></div></div><div class="fg"><label>Pathologies (virgule)</label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div><div class="fg"><label>Allergies (virgule)</label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);const epDrSd=new SearchableDropdown("ep-dr-sd",userOptions("medecin"),null,"Rechercher un médecin référent...");epDrSd.setValue(p.medecin_ref||"");ov.querySelector("#ep-s").onclick=()=>{p.tel=G("ep-tel").value||"—";p.ville=G("ep-vl").value||"—";p.pathologies=(G("ep-path").value||"").split(",").map(x=>x.trim()).filter(Boolean);p.allergies=(G("ep-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);const newDr=epDrSd.getValue();if(newDr&&newDr!==p.medecin_ref){DB.access=DB.access.filter(a=>!(a.patientId===pid&&a.type==="medecin_ref"));DB.access.push({id:uid(),patientId:pid,userId:newDr,type:"medecin_ref",date:today(),modules:["all"]});p.medecin_ref=newDr;}saveDB(DB);ov.remove();rAdmin();};}
+function showEditPatient(pid){const p=DB.patients.find(x=>x.id===pid);if(!p)return;const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Modifier — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Téléphone</label><input id="ep-tel" value="${p.tel||""}"/></div><div class="fg"><label>Ville</label><input id="ep-vl" value="${p.ville||""}"/></div></div><div class="fg"><label>Médecin référent</label><div id="ep-dr-sd"></div></div><div class="fg"><label>Pathologies (virgule)</label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div><div class="fg"><label>Allergies (virgule)</label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);const epDrSd=new SearchableDropdown("ep-dr-sd",userOptions("medecin"),null,"Rechercher un médecin référent...");epDrSd.setValue(p.medecin_ref||"");ov.querySelector("#ep-s").onclick=()=>{p.tel=G("ep-tel").value||"—";p.ville=G("ep-vl").value||"—";p.pathologies=(G("ep-path").value||"").split(",").map(x=>x.trim()).filter(Boolean);p.allergies=(G("ep-alg").value||"").split(",").map(x=>x.trim()).filter(Boolean);const newDr=epDrSd.getValue();if(newDr&&newDr!==p.medecin_ref){DB.access=DB.access.filter(a=>!(a.patientId===pid&&a.type==="medecin_ref"));DB.access.push({id:uid(),patientId:pid,userId:newDr,type:"medecin_ref",date:today(),modules:["all"]});p.medecin_ref=newDr;}saveDB(DB,{table:"patients",rows:[p]});ov.remove();rAdmin();};}
 
 // ══════════════════════════════════════════════════════════
 //  INIT
@@ -5958,6 +6053,80 @@ h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#E
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`);
   win.document.close();
+}
+
+// ── Niveau 3 : Supabase Realtime ─────────────────────────────
+// Écoute les changements en temps réel sur les tables clés
+function startRealtimePro(){
+  if(window._supaWS){ try{window._supaWS.close();}catch(e){} }
+
+  const wsUrl = SUPA_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
+  const ws = new WebSocket(wsUrl);
+  window._supaWS = ws;
+
+  ws.onopen = ()=>{
+    // S'abonner aux changements sur rdv, consultations, patients
+    const tables = ["rdv","consultations","patients","prescriptions"];
+    tables.forEach((table,i)=>{
+      setTimeout(()=>{
+        ws.send(JSON.stringify({
+          topic: "realtime:public:" + table,
+          event: "phx_join",
+          payload: {config:{broadcast:{self:false},presence:{key:""},postgres_changes:[{event:"*",schema:"public",table}]}},
+          ref: String(i+1)
+        }));
+      }, i * 200);
+    });
+    console.log("[Supabase Realtime] ✓ Connecté");
+  };
+
+  ws.onmessage = (e)=>{
+    try {
+      const msg = JSON.parse(e.data);
+      if(msg.event !== "postgres_changes") return;
+      const {table, eventType, new: newRow} = msg.payload?.data || {};
+      if(!table || !eventType) return;
+
+      console.log("[Realtime]", eventType, table, newRow?.id||"");
+
+      // Mettre à jour DB locale selon le type d'événement
+      if(eventType === "INSERT" || eventType === "UPDATE"){
+        if(table === "rdv" && newRow){
+          const idx = DB.rdv.findIndex(r=>r.id===newRow.id);
+          const mapped = {...newRow, patientId:newRow.patient_id, s:newRow.statut, c:newRow.color};
+          if(idx>=0) DB.rdv[idx]=mapped; else DB.rdv.unshift(mapped);
+        } else if(table === "consultations" && newRow){
+          const pid = newRow.patient_id;
+          if(!DB.consultations[pid]) DB.consultations[pid]=[];
+          const idx = DB.consultations[pid].findIndex(c=>c.id===newRow.id);
+          if(idx>=0) DB.consultations[pid][idx]=newRow; else DB.consultations[pid].unshift(newRow);
+        } else if(table === "patients" && newRow){
+          const idx = DB.patients.findIndex(p=>p.id===newRow.id);
+          const mapped = {...newRow, userId:newRow.user_id};
+          if(idx>=0) DB.patients[idx]=mapped; else DB.patients.push(mapped);
+        } else if(table === "prescriptions" && newRow){
+          const pid = newRow.patient_id;
+          if(!DB.rx[pid]) DB.rx[pid]=[];
+          const idx = DB.rx[pid].findIndex(r=>r.id===newRow.id);
+          const mapped = {...newRow, patientId:pid, s:newRow.statut, ren:newRow.renouvellement, ord:newRow.ordonnance};
+          if(idx>=0) DB.rx[pid][idx]=mapped; else DB.rx[pid].unshift(mapped);
+        }
+        // Rafraîchir l'affichage en cours si pertinent
+        if(currentPatient && ["consultations","rdv","prescriptions"].includes(table)){
+          renderPage();
+        }
+      } else if(eventType === "DELETE" && msg.payload?.data?.old_record){
+        const old = msg.payload.data.old_record;
+        if(table==="rdv") DB.rdv = DB.rdv.filter(r=>r.id!==old.id);
+      }
+    } catch(err){ console.warn("[Realtime] parse error:", err); }
+  };
+
+  ws.onerror = ()=> console.warn("[Supabase Realtime] Erreur connexion");
+  ws.onclose = ()=>{
+    console.warn("[Supabase Realtime] Déconnecté — reconnexion dans 30s");
+    setTimeout(startRealtimePro, 30000);
+  };
 }
 </script>
 </body>
