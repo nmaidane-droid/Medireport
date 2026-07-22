@@ -479,12 +479,25 @@ function tabMed() {
   var h="";
   if(act.length) h+='<div class="stit">Traitements actuels ('+act.length+')</div>';
   act.forEach(function(r){
-    h+='<div class="rxi"><div class="rxio">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div><div style="font-size:12px;color:var(--blue);font-weight:600">'+r.pos+'</div><div style="font-size:10px;color:#94A3B8;margin-top:2px">Prescrit le '+r.date+'</div></div>'+bdg("Actif","bgn")+'</div>';
+    var drRx = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
+    var drLabel = drRx ? (drRx.titre||"Dr.") + " " + drRx.nom + (drRx.spec ? " · " + drRx.spec : "") : "";
+    h+='<div class="rxi"><div class="rxio">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div><div style="font-size:12px;color:var(--blue);font-weight:600">'+r.pos+'</div>'+
+    (drLabel ? '<div style="font-size:11px;color:#0BA896;font-weight:600;margin-top:3px">👨‍⚕️ '+drLabel+'</div>' : '')+
+    '<div style="font-size:10px;color:#94A3B8;margin-top:2px">Prescrit le '+r.date+'</div></div>'+bdg("Actif","bgn")+'</div>';
   });
   if(arr.length) h+='<div class="stit" style="margin-top:14px">Arrêtés ('+arr.length+')</div>';
   arr.forEach(function(r){
-    h+='<div class="rxi" style="opacity:.6"><div class="rxio" style="background:#F1F5F9">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700;text-decoration:line-through">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div></div>'+bdg("Arrêté","bgr")+'</div>';
+    var drRxS = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
+    var drLabelS = drRxS ? (drRxS.titre||"Dr.") + " " + drRxS.nom : "";
+    h+='<div class="rxi" style="opacity:.6"><div class="rxio" style="background:#F1F5F9">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700;text-decoration:line-through">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div>'+
+    (drLabelS ? '<div style="font-size:11px;color:#94A3B8;margin-top:2px">'+drLabelS+'</div>' : '')+
+    '</div>'+bdg("Arrêté","bgr")+'</div>';
   });
+  h += '<div style="margin:16px 0 4px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px">';
+  h += '<span style="font-size:24px">🏥</span>';
+  h += '<div><div style="font-size:13px;font-weight:700;color:#64748B">Envoi \u00e0 la pharmacie</div>';
+  h += '<div style="font-size:12px;color:#94A3B8;margin-top:2px">Fonctionnalit\u00e9 <span style="background:#E2E8F0;color:#64748B;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px">En d\u00e9veloppement</span></div></div>';
+  h += '</div>';
   return h;
 }
 
