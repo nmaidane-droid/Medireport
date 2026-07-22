@@ -1245,7 +1245,8 @@ function modal(html){
 function canAccessPatient(userId, patientId){
   const u = DB.users.find(x=>x.id===userId);
   if(!u) return false;
-  if(u.role==="admin") return true;
+  // Admin, médecin, spécialiste : accès à tous les patients
+  if(["admin","medecin","specialiste"].includes(u.role)) return true;
   if(u.patientId===patientId) return true;
   return DB.access.some(a=>a.patientId===patientId && a.userId===userId);
 }
