@@ -483,7 +483,7 @@ function tabMed() {
     var drLabel = drRx ? (drRx.titre||"Dr.") + " " + drRx.nom + (drRx.spec ? " · " + drRx.spec : "") : "";
     h+='<div class="rxi"><div class="rxio">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div><div style="font-size:12px;color:var(--blue);font-weight:600">'+r.pos+'</div>'+
     (drLabel ? '<div style="font-size:11px;color:#0BA896;font-weight:600;margin-top:3px">👨‍⚕️ '+drLabel+'</div>' : '')+
-    '<div style="font-size:10px;color:#94A3B8;margin-top:2px">Prescrit le '+r.date+'</div></div>'+bdg("Actif","bgn")+'</div>';
+    '<div style="font-size:11px;color:#94A3B8;margin-top:2px">Prescrit par <strong style="color:#64748B">'+(drRx?(drRx.titre||"Dr.")+" "+drRx.nom:"—")+'</strong> le '+r.date+'</div></div>'+bdg("Actif","bgn")+'</div>';
   });
   if(arr.length) h+='<div class="stit" style="margin-top:14px">Arrêtés ('+arr.length+')</div>';
   arr.forEach(function(r){

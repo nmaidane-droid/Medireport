@@ -4242,7 +4242,7 @@ function dRx(){
     const first=group[0];const drU=DB.users.find(x=>x.id===first.dr);const ordId="ord-"+Math.random().toString(36).slice(2,8);
     const rows=group.map(r=>{
       const rxDr=DB.users.find(x=>x.id===r.dr);
-      const rxDrLabel=rxDr?`<div style="font-size:11px;color:#0BA896;font-weight:600;margin-top:4px">👨‍⚕️ ${rxDr.titre||"Dr."} ${rxDr.nom}${rxDr.spec?" · "+rxDr.spec:""}</div>`:"";
+      const rxDrLabel=rxDr?`<div style="font-size:11px;color:#64748B;margin-top:4px">Prescrit par <strong>${rxDr.titre||"Dr."} ${rxDr.nom}</strong> le ${r.date}</div>`:`<div style="font-size:11px;color:#94A3B8;margin-top:4px">Prescrit le ${r.date}</div>`;
       return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--g100)"><div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--g900)">${r.med} <span style="font-weight:400;color:var(--g500)">${r.dos}</span></div><div style="font-size:12px;color:var(--g600);margin-top:3px;line-height:1.5">${r.pos}</div>${rxDrLabel}<div style="margin-top:6px">${bdg(r.ind,"bb")}</div></div><div style="text-align:right;flex-shrink:0">${r.s==="active"?bdg("Actif","bgn"):r.s==="stopped"?bdg("Arrêté","bgr"):bdg("⚠ Allergie","br")}${r.ren&&r.ren!=="—"?`<div style="font-size:10px;color:var(--g400);margin-top:5px">Renouvellement<br/><strong>${r.ren}</strong></div>`:""}</div></div>`;
     }).join("");
     const titre=drU?.titre?drU.titre+" ":"Dr. ";
