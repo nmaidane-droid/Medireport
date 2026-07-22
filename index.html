@@ -989,7 +989,7 @@ async function syncChanged(changed){
     id:r.id, patient_id:r.patientId||r.patient_id,
     day:r.day||null, mo:r.mo||null, h:r.h||null,
     dr:r.dr||null, spec:r.spec||null, lieu:r.lieu||null,
-    motif:r.motif||null, statut:r.s||r.statut||"à confirmer",
+    motif:r.motif||null, statut:r.s||r.statut||"confirmé",
     color:r.c||r.color||null
   }));
   else if(table==="patients") data = rows.map(p=>({
@@ -1152,7 +1152,7 @@ async function syncToSupabase(db){
       id:r.id, patient_id:r.patientId||r.patient_id,
       day:r.day||null, mo:r.mo||null, h:r.h||null,
       dr:r.dr||null, spec:r.spec||null, lieu:r.lieu||null,
-      motif:r.motif||null, statut:r.s||r.statut||"à confirmer",
+      motif:r.motif||null, statut:r.s||r.statut||"confirmé",
       color:r.c||r.color||null
     }));
     await upsert("rdv", rdvToSync);
@@ -1432,11 +1432,7 @@ function getNotifications(){
     const p2=DB.patients.find(x=>x.id===d.patientId);
     notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Rapport spécialiste disponible",body:`${d.specialite} — ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",key:"avis_"+d.id,action:()=>openDossier(d.patientId)});
   });
-  // 1. RDV à confirmer
-  DB.rdv.filter(r=>r.s==="à confirmer"&&patients.some(p=>p.id===r.patientId)).forEach(r=>{
-    const p=DB.patients.find(x=>x.id===r.patientId);
-    notifs.push({type:"rdv",icon:"📅",color:"#F59E0B",title:"RDV à confirmer",body:`${r.h} le ${r.day} ${r.mo}`,patientId:r.patientId,patient:p?p.prenom+" "+p.nom:"—",key:"rdv_"+r.id,action:()=>openDossier(r.patientId)});
-  });
+
 
   // Renouvellement supprimé — durée de traitement gérée directement sur l'ordonnance
 
@@ -1450,11 +1446,13 @@ function getNotifications(){
 }
 
 function renderNotifBadge(){
-  const notifs = getNotifications();
   const badge = document.getElementById("notif-badge");
   if(!badge) return;
-  if(notifs.length>0){
-    badge.textContent = notifs.length > 9 ? "9+" : notifs.length;
+  const allNotifs = getNotifications();
+  const vues = _vuedNotifKeys || new Set();
+  const unread = allNotifs.filter(n=>!vues.has(n.key));
+  if(unread.length>0){
+    badge.textContent = unread.length > 9 ? "9+" : unread.length;
     badge.style.display = "flex";
   } else {
     badge.style.display = "none";
@@ -1474,16 +1472,18 @@ async function loadVuesNotifs(){
 async function markNotifVue(key, action){
   if(!_vuedNotifKeys) _vuedNotifKeys = new Set();
   _vuedNotifKeys.add(key);
-  try {
-    await supaFetch("notifications_vues", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Prefer":"resolution=ignore-duplicates"},
-      body:JSON.stringify({user_id:currentUser.id, notification_key:key})
-    });
-  } catch(e){}
+  // Fermer panel et exécuter action immédiatement
   panel_close();
   if(action) action();
   renderNotifBadge();
+  // Sync Supabase en arrière-plan
+  try {
+    await supaFetch("notifications_vues", {
+      method:"POST",
+      prefer:"resolution=ignore-duplicates",
+      body:JSON.stringify({user_id:currentUser.id, notification_key:key})
+    });
+  } catch(e){ console.warn("markNotifVue error:", e); }
 }
 function panel_close(){
   const panel=document.getElementById("notif-panel");
@@ -4475,7 +4475,7 @@ function showAddRx(pid){
   };
 }
 
-function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=DB.rdv.filter(r=>r.patientId===p.id);const conf=rdvs.filter(r=>r.s==="confirmé"),pend=rdvs.filter(r=>r.s==="à confirmer");const card=r=>`<div class="rdvi"><div class="rdvd" style="background:${r.c}"><div class="rdvday">${r.day}</div><div class="rdvmo">${r.mo}</div></div><div style="flex:1"><div style="font-size:14px;font-weight:800;color:var(--g900);margin-bottom:3px">${uName(r.dr)}</div><div style="font-size:12px;color:var(--g500);margin-bottom:4px">🕐 ${r.h} · ${r.spec}</div><div style="font-size:12px;color:var(--g600);margin-bottom:6px">${r.motif}</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${bdg("✓ Confirmé","bgn")}<span style="font-size:11px;color:var(--g400)">📍 ${r.lieu}</span><button class="btn bs bsm" onclick="printConvocation('${p.id}',r)" title="Imprimer convocation">🖨</button><button class="btn bd bsm" onclick="delRdv('${r.id}','${p.id}')">Supprimer</button></div></div></div>`;G("dossier-content").innerHTML=`<div style="margin-bottom:16px;display:flex;justify-content:flex-end"><button class="btn bp" onclick="showAddRdv('${p.id}')">+ Planifier un RDV</button></div>${conf.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Confirmés (${conf.length})</div>${conf.map(card).join("")}`:""} ${pend.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 10px">À confirmer (${pend.length})</div>${pend.map(card).join("")}`:""}${!rdvs.length?`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucun rendez-vous</div>`:""}`;}
+function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=DB.rdv.filter(r=>r.patientId===p.id);const conf=rdvs.filter(r=>r.s==="confirmé"),pend=[];const card=r=>`<div class="rdvi"><div class="rdvd" style="background:${r.c}"><div class="rdvday">${r.day}</div><div class="rdvmo">${r.mo}</div></div><div style="flex:1"><div style="font-size:14px;font-weight:800;color:var(--g900);margin-bottom:3px">${uName(r.dr)}</div><div style="font-size:12px;color:var(--g500);margin-bottom:4px">🕐 ${r.h} · ${r.spec}</div><div style="font-size:12px;color:var(--g600);margin-bottom:6px">${r.motif}</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${bdg("✓ Confirmé","bgn")}<span style="font-size:11px;color:var(--g400)">📍 ${r.lieu}</span><button class="btn bs bsm" onclick="printConvocation('${p.id}',r)" title="Imprimer convocation">🖨</button><button class="btn bd bsm" onclick="delRdv('${r.id}','${p.id}')">Supprimer</button></div></div></div>`;G("dossier-content").innerHTML=`<div style="margin-bottom:16px;display:flex;justify-content:flex-end"><button class="btn bp" onclick="showAddRdv('${p.id}')">+ Planifier un RDV</button></div>${conf.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Confirmés (${conf.length})</div>${conf.map(card).join("")}`:""} ${pend.length?`<div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 10px">À confirmer (${pend.length})</div>${pend.map(card).join("")}`:""}${!rdvs.length?`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucun rendez-vous</div>`:""}`;}
 function confirmRdv(id){const r=DB.rdv.find(x=>x.id===id);if(r)r.s="confirmé";saveDB(DB,{table:"rdv",rows:[r]});dRdv();}
 function delRdv(id,pid){DB.rdv=DB.rdv.filter(r=>r.id!==id);saveDB(DB);dRdv();}
 
