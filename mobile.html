@@ -215,6 +215,17 @@ function login() {
   startRealtimeMobile();
 }
 
+
+// ── SUPABASE CONFIG ──────────────────────────────────────────
+var SUPA_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
+var SUPA_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
+
+function supaGet(path, cb) {
+  fetch(SUPA_URL + "/rest/v1/" + path, {
+    headers: {"apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY}
+  }).then(function(r){ return r.json(); }).then(cb).catch(function(){ cb(null); });
+}
+
 function startRealtimeMobile() {
   if (window._mobileWS) { try { window._mobileWS.close(); } catch(e){} }
   var wsUrl = SUPA_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
@@ -547,10 +558,13 @@ function tabMed() {
     function pd(d){if(!d||d==="—")return 0;var p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;}
     return pd(b.date)-pd(a.date);
   });
-  if(!rx.length) return emp("💊","Aucune prescription");
+  // Debug temporaire
+  var debugInfo = '<div id="supa-debug" style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;font-size:11px;margin-bottom:10px;color:#92400E">'+
+    '🔍 PAT.id: '+PAT.id+' · DB.rx keys: '+Object.keys(DB.rx||{}).join(",")+' · rx[PAT.id]: '+rx.length+'</div>';
+  if(!rx.length) return debugInfo + emp("💊","Aucune prescription");
   var act=rx.filter(function(r){return r.s==="active";});
   var arr=rx.filter(function(r){return r.s==="stopped";});
-  var h="";
+  var h=debugInfo;
   if(act.length) h+='<div class="stit">Traitements actuels ('+act.length+')</div>';
   act.forEach(function(r){
     var drRx = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
@@ -710,13 +724,19 @@ function refreshPatientData() {
     }
   }
 
-  // Prescriptions
+  // Prescriptions — rafraîchir tabMed immédiatement après chargement
   supaGet("prescriptions?patient_id=eq." + pid + "&select=*&order=created_at.desc", function(rows) {
     if (rows) {
       DB.rx = DB.rx || {};
       DB.rx[pid] = rows.map(function(rx) {
-        return Object.assign({}, rx, {patientId:rx.patient_id, s:rx.statut, ren:rx.renouvellement, ord:rx.ordonnance});
+        var st = rx.statut || "active";
+        return Object.assign({}, rx, {patientId:rx.patient_id, s:st, ren:rx.renouvellement, ord:rx.ordonnance});
       });
+      // Rafraîchir immédiatement si on est sur l'onglet médicaments
+      var activeTab = document.querySelector(".tab.on");
+      if (activeTab && activeTab.textContent.indexOf("dicament") >= 0) {
+        activeTab.click();
+      }
     }
     done();
   });
