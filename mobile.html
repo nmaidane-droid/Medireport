@@ -211,8 +211,7 @@ function login() {
   // ── Charger les données fraîches depuis Supabase au login ──
   refreshPatientData();
 
-  // ── Niveau 3 : Realtime WebSocket ──
-  startRealtimeMobile();
+  // Realtime désactivé sur mobile — refreshPatientData suffit
 }
 
 
@@ -420,7 +419,7 @@ function tabSyn() {
   h+='</div>';
   if(rx.length){
     h+='<div class="card"><div class="ctit">💊 Traitements en cours ('+rx.length+')</div>';
-    rx.slice(0,3).forEach(function(r){
+    rx.forEach(function(r){
       h+='<div class="rxi"><div class="rxio">💊</div><div><div style="font-size:14px;font-weight:700">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div><div style="font-size:12px;color:var(--blue);font-weight:600">'+r.pos+'</div></div></div>';
     });
     h+='</div>';
@@ -512,7 +511,12 @@ function toggleCon(el){
 
 
 function tabLab() {
-  var labs=DB.labos[PAT.id]||[];
+  var labsRaw=DB.labos[PAT.id]||[];
+  // Trier par date décroissante
+  var labs=[].concat(labsRaw).sort(function(a,b){
+    function pd(d){if(!d)return 0;var p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;}
+    return pd(b.date)-pd(a.date);
+  });
   if(!labs.length) return emp("🧪","Aucun résultat de laboratoire");
   var h='<div class="stit">Résultats biologiques ('+labs.length+')</div>';
   labs.forEach(function(lb,i){
@@ -559,12 +563,10 @@ function tabMed() {
     return pd(b.date)-pd(a.date);
   });
   // Debug temporaire
-  var debugInfo = '<div id="supa-debug" style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;font-size:11px;margin-bottom:10px;color:#92400E">'+
-    '🔍 PAT.id: '+PAT.id+' · DB.rx keys: '+Object.keys(DB.rx||{}).join(",")+' · rx[PAT.id]: '+rx.length+'</div>';
-  if(!rx.length) return debugInfo + emp("💊","Aucune prescription");
+  if(!rx.length) return emp("💊","Aucune prescription");
   var act=rx.filter(function(r){return r.s==="active";});
   var arr=rx.filter(function(r){return r.s==="stopped";});
-  var h=debugInfo;
+  var h="";
   if(act.length) h+='<div class="stit">Traitements actuels ('+act.length+')</div>';
   act.forEach(function(r){
     var drRx = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
