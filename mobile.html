@@ -382,7 +382,12 @@ function tabSyn() {
   var p=PAT;
   var rx=(DB.rx[p.id]||[]).filter(function(r){return r.s==="active";});
   var cons=DB.consultations[p.id]||[];
-  var labs=DB.labos[p.id]||[];
+  // Trier les labos par date décroissante pour avoir le plus récent en premier
+  var labsRaw=DB.labos[p.id]||[];
+  var labs=[].concat(labsRaw).sort(function(a,b){
+    function pd(d){if(!d)return 0;var p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;}
+    return pd(b.date)-pd(a.date);
+  });
   var months = {Jan:0,Fév:1,Mar:2,Avr:3,Mai:4,Jun:5,Jul:6,Juil:6,Aoû:7,Août:7,Sep:8,Oct:9,Nov:10,Déc:11};
   var nowD = new Date(); nowD.setHours(0,0,0,0);
   var nowFull = new Date();
