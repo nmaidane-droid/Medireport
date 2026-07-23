@@ -4101,6 +4101,44 @@ function showImgDetail(iid,pid){const img=(DB.imagerie[pid]||[]).find(x=>x.id===
 let rxTab="active";
 function toggleOrd(id){const body=document.getElementById("body-"+id);const arr=document.getElementById("arr-"+id);const hd=document.getElementById("hd-"+id);if(!body)return;const isOpen=body.style.display!=="none";body.style.display=isOpen?"none":"block";if(arr)arr.style.transform=isOpen?"":"rotate(90deg)";if(arr)arr.textContent=isOpen?"▸":"▾";if(hd)hd.style.background=isOpen?"var(--g50)":"var(--blue-l)";}
 
+function showStopRx(rxId, pid) {
+  const ov = modal(`<div class="mb"><div class="mh"><span class="mt2">🛑 Arrêter le traitement</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div class="fg"><label>Motif d'arrêt</label>
+      <select id="stop-motif">
+        <option value="">— Sélectionner un motif —</option>
+        <option>Guérison / Rémission</option>
+        <option>Effet secondaire / Intolérance</option>
+        <option>Allergie découverte</option>
+        <option>Interaction médicamenteuse</option>
+        <option>Contre-indication apparue</option>
+        <option>Inefficacité du traitement</option>
+        <option>Remplacement par un autre médicament</option>
+        <option>Fin de durée prescrite</option>
+        <option>Décision du patient</option>
+        <option>Autre</option>
+      </select>
+    </div>
+    <div class="fg"><label>Précisions (optionnel)</label><input id="stop-detail" placeholder="Ex: Rash cutané apparu le 10/07/2026"/></div>
+  </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bd" id="stop-confirm">Confirmer l'arrêt</button></div></div>`);
+  ov.querySelector("#stop-confirm").onclick = () => {
+    const motif = document.getElementById("stop-motif").value;
+    const detail = document.getElementById("stop-detail").value;
+    if (!motif) { alert("Sélectionnez un motif d'arrêt"); return; }
+    const motifFinal = detail ? motif + " — " + detail : motif;
+    const rxList = DB.rx[pid] || [];
+    const rx = rxList.find(r => r.id === rxId);
+    if (rx) {
+      rx.s = "stopped";
+      rx.statut = "stopped";
+      rx.motif_arret = motifFinal;
+      rx.date_arret = today();
+      saveDB(DB, {table:"prescriptions", rows:[Object.assign({},rx,{patient_id:pid,statut:"stopped",motif_arret:motifFinal,date_arret:rx.date_arret})]});
+    }
+    ov.remove();
+    dRx();
+  };
+}
+
 function dRx(){
   const p=DB.patients.find(x=>x.id===currentPatientId);const u=currentUser;const isMed=["medecin","specialiste","admin"].includes(u.role);
   const allergyAlerts=p.allergies?.map(a=>ale("d","Allergie — "+a,"Contre-indication absolue")).join("")||"";
@@ -4120,7 +4158,9 @@ function dRx(){
     const rows=group.map(r=>{
       const rxDr=DB.users.find(x=>x.id===r.dr);
       const rxDrLabel=rxDr?`<div style="font-size:11px;color:#64748B;margin-top:4px">Prescrit par <strong>${rxDr.titre||"Dr."} ${rxDr.nom}</strong> le ${r.date}</div>`:`<div style="font-size:11px;color:#94A3B8;margin-top:4px">Prescrit le ${r.date}</div>`;
-      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--g100)"><div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--g900)">${r.med} <span style="font-weight:400;color:var(--g500)">${r.dos}</span></div><div style="font-size:12px;color:var(--g600);margin-top:3px;line-height:1.5">${r.pos}</div>${rxDrLabel}<div style="margin-top:6px">${bdg(r.ind,"bb")}</div></div><div style="text-align:right;flex-shrink:0">${(()=>{
+      const stopBtn = (r.s==="active" && isMed) ? `<button onclick="event.stopPropagation();showStopRx('${r.id}','${p.id}')" style="background:#FEE2E2;color:#DC2626;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">🛑 Arrêter</button>` : "";
+      const motifArretHtml = r.motif_arret ? `<div style="font-size:11px;color:#DC2626;margin-top:4px">🛑 Arrêt : <em>${r.motif_arret}</em></div>` : "";
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--g100)"><div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--g900)">${r.med} <span style="font-weight:400;color:var(--g500)">${r.dos}</span></div><div style="font-size:12px;color:var(--g600);margin-top:3px;line-height:1.5">${r.pos}</div>${rxDrLabel}<div style="margin-top:6px">${bdg(r.ind,"bb")}</div>${motifArretHtml}${stopBtn}</div><div style="text-align:right;flex-shrink:0">${(()=>{
         if(r.s==="allergy") return bdg("⚠ Allergie","br");
         if(r.a_vie) return bdg("Actif","bgn");
         if(r.date_fin){

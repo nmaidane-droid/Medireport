@@ -717,6 +717,8 @@ function tabMed() {
     var drLabelS = drRxS ? (drRxS.titre||"Dr.") + " " + drRxS.nom : "";
     h+='<div class="rxi" style="opacity:.6"><div class="rxio" style="background:#F1F5F9">💊</div><div style="flex:1"><div style="font-size:14px;font-weight:700;text-decoration:line-through">'+r.med+'</div><div style="font-size:12px;color:#64748B">'+r.dos+'</div>'+
     (drLabelS ? '<div style="font-size:11px;color:#94A3B8;margin-top:2px">'+drLabelS+'</div>' : '')+
+    (r.motif_arret ? '<div style="font-size:11px;color:#DC2626;margin-top:3px">🛑 '+r.motif_arret+'</div>' : '')+
+    (r.date_arret ? '<div style="font-size:11px;color:#94A3B8;margin-top:2px">Arrêté le '+r.date_arret+'</div>' : '')+
     '</div>'+bdg("Arrêté","bgr")+'</div>';
   });
   h += '<div style="margin:16px 0 4px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px">';
