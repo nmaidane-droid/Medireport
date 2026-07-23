@@ -878,13 +878,10 @@ function printBilanMobile() {
   var p = PAT;
   if (!p) return;
 
-  // Debug
   var cons_count = DB.consultations && DB.consultations[p.id] ? DB.consultations[p.id].length : 0;
   var lab_count = DB.labos && DB.labos[p.id] ? DB.labos[p.id].length : 0;
   var img_count = DB.imagerie && DB.imagerie[p.id] ? DB.imagerie[p.id].length : 0;
   var rx_count = DB.rx && DB.rx[p.id] ? DB.rx[p.id].length : 0;
-  alert("DEBUG - pid:"+p.id+" cons:"+cons_count+" labos:"+lab_count+" imgs:"+img_count+" rx:"+rx_count);
-
   var hasData = cons_count > 0 || lab_count > 0 || img_count > 0 || rx_count > 0;
   if (!hasData) {
     var pid = p.id;
