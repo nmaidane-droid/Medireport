@@ -6085,8 +6085,9 @@ function printBilanComplet(pid) {
   if(sessionTimer) clearTimeout(sessionTimer);
   window.addEventListener("focus", resetSessionTimer, {once:true});
 
-  const win = window.open("","_blank","width=700,height=900");
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+  if(sessionTimer) clearTimeout(sessionTimer);
+  window.addEventListener("focus", resetSessionTimer, {once:true});
+  const bilanHtml = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
 <title>Bilan complet — ${p.prenom} ${p.nom}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
@@ -6200,8 +6201,10 @@ ${nextRdv ? `<div class="section">
   <div class="footer-note">Dossier N° ${pid}</div>
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),500);<\/script>
-</body></html>`);
-  win.document.close();
+</body></html>`;
+  const blob = new Blob([bilanHtml], {type:"text/html"});
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, "_blank");
 }
 
 function printFicheAcces(userId){

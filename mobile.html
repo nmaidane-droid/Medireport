@@ -964,7 +964,9 @@ function printBilanMobile() {
   html += '<div class="footer">MediReport · Document confidentiel · Usage médical uniquement · '+todayStr+'</div>';
   html += '</body></html>';
 
-  var w = window.open("","_blank");
-  if(w){ w.document.write(html); w.document.close(); }
+  // Ouvrir dans la même fenêtre pour éviter le blocage mobile
+  var blob = new Blob([html], {type:"text/html"});
+  var url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
 }
 </script>
