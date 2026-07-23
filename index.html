@@ -3292,6 +3292,16 @@ function showAddConsult(pid){
             <div class="fg" style="margin:0"><label>Tension oculaire (mmHg)</label><input id="fc-tood" placeholder="Ex: 16"/></div>
           </div>
         </div>
+        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔀 Strabisme</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+          <div class="fg" style="margin:0"><label>Type</label>
+            <select id="fc-strab-type"><option value="">—</option><option>Absent</option><option>Convergent (ésotropie)</option><option>Divergent (exotropie)</option><option>Vertical (hypertropie)</option><option>Alternant</option></select>
+          </div>
+          <div class="fg" style="margin:0"><label>Angle (ΔP)</label><input id="fc-strab-angle" placeholder="Ex: 15"/></div>
+          <div class="fg" style="margin:0"><label>Œil concerné</label>
+            <select id="fc-strab-oeil"><option value="">—</option><option>OD</option><option>OG</option><option>Alternant</option></select>
+          </div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
           <div class="fg" style="margin:0"><label>Addition VP (presbytie)</label><input id="fc-add" placeholder="Ex: +2.50"/></div>
           <div class="fg" style="margin:0"><label>Port de correction actuel</label>
@@ -3641,6 +3651,9 @@ function showAddConsult(pid){
       if(v("fc-tood"))    c["TO OD"]          = v("fc-tood")+" mmHg";
       if(v("fc-toog"))    c["TO OG"]          = v("fc-toog")+" mmHg";
       if(v("fc-port"))    c["Port actuel"]    = v("fc-port");
+      if(v("fc-strab-type"))  c["Strabisme"]     = v("fc-strab-type");
+      if(v("fc-strab-angle")) c["Angle strab."]  = v("fc-strab-angle")+" ΔP";
+      if(v("fc-strab-oeil"))  c["Œil strab."]    = v("fc-strab-oeil");
       if(v("fc-seg-ant")) c["Segment ant."]   = v("fc-seg-ant");
       if(v("fc-fdo"))     c["Fond d'œil"]     = v("fc-fdo");
       if(v("fc-verres"))  c["Verres"]         = v("fc-verres");

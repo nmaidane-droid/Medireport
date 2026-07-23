@@ -604,7 +604,7 @@ function tabCon() {
         h+='</div>';
         h+='</div>';
         // Champs communs
-        var commonFields=[["Addition VP","Addition VP"],["Port actuel","Port actuel"],["Segment ant.","Segment ant."],["Fond d'oeil","Fond d'oeil"],["Verres","Verres"],["Traitements","Traitements"]];
+        var commonFields=[["Addition VP","Addition VP"],["Port actuel","Port actuel"],["Strabisme","Strabisme"],["Angle strab.","Angle strab."],["Segment ant.","Segment ant."],["Fond d'oeil","Fond d'oeil"],["Verres","Verres"],["Traitements","Traitements"]];
         var commonHtml="";
         commonFields.forEach(function(f){ if(ct[f[1]]) commonHtml+='<div style="font-size:11px;margin-bottom:3px"><span style="color:#94A3B8">'+f[0]+'</span> <strong>'+ct[f[1]]+'</strong></div>'; });
         if(commonHtml) h+='<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:8px;margin-bottom:10px">'+commonHtml+'</div>';
