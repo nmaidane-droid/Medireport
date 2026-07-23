@@ -503,8 +503,6 @@ const NAV_CFG = {
 };
 
 // Default data
-const DB_VERSION = "2.0";
-
 // ── Seen items — Supabase ──────────────────────────────────
 var _seenCache = {}; // cache local pour éviter trop de requêtes
 
@@ -577,7 +575,7 @@ async function loadDBFromSupabase(){
       demandes_avis:(demandesAvis||[]).map(d=>({...d,patientId:d.patient_id})),
       logs:[]
     };
-    try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
+    try{localStorage.setItem("medirecord_db",JSON.stringify(db));}catch(e){}
     return db;
   } catch(err){
     console.warn("Supabase inaccessible, fallback localStorage:", err);
@@ -586,10 +584,9 @@ async function loadDBFromSupabase(){
 }
 
 function loadDBLocal(){
+  // Fallback localStorage si Supabase indisponible
   const raw=localStorage.getItem("medirecord_db");
-  const ver=localStorage.getItem("medirecord_db_version");
-  if(raw&&ver===DB_VERSION){try{return JSON.parse(raw);}catch(e){}}
-  // Aucun cache — retourner DB vide (login screen reste visible)
+  if(raw){try{return JSON.parse(raw);}catch(e){}}
   return {users:[],patients:[],access:[],consultations:{},labos:{},rx:{},imagerie:{},rdv:[],demandes_labo:[],demandes_avis:[],logs:[]};
 }
 
@@ -618,7 +615,7 @@ function showServiceUnavailable(){
 
 function saveDB(db, changed){
   // Cache local
-  try{localStorage.setItem("medirecord_db",JSON.stringify(db));localStorage.setItem("medirecord_db_version",DB_VERSION);}catch(e){}
+  try{localStorage.setItem("medirecord_db",JSON.stringify(db));}catch(e){}
   // Sync Supabase ciblée en arrière-plan
   if(changed) syncChanged(changed).catch(e=>console.warn("[Supabase] sync error:",e));
   else syncToSupabase(db).catch(e=>console.warn("[Supabase] full sync error:",e)); // fallback full sync
@@ -1224,7 +1221,7 @@ function buildSidebar(){
     resetDiv.addEventListener("click", ()=>{
       if(confirm("Réinitialiser TOUTES les données ? Cette action est irréversible.")){
         localStorage.removeItem("medirecord_db");
-        localStorage.removeItem("medirecord_db_version");
+        
         location.reload();
       }
     });
@@ -2095,9 +2092,12 @@ function rDossier(){
     <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
         <div style="margin-top:6px">${p.consentement?`<span style="background:rgba(22,163,74,.2);color:#86efac;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">✓ Consentement recueilli le ${p.consentement.date}</span>`:`<span style="background:rgba(229,57,53,.2);color:#fca5a5;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">⚠ Consentement manquant</span>`}</div><div class="dv-tags">${p.pathologies?.map(x=>`<span class="dv-tag">${x}</span>`).join("")||""}${p.allergies?.map(x=>`<span class="dv-tag dv-tag-red">⚠ ${x}</span>`).join("")||""}${p.dialyse?`<span class="dv-tag" style="background:rgba(11,168,150,.3)">💧 Hémodialyse ${p.seances_semaine}×/sem</span>`:""}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px">Médecin référent</div><div style="font-size:13px;font-weight:700;color:#fff">${titre}${ref?ref.prenom+" "+ref.nom:"—"}</div><div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${ref?.spec||""}</div></div></div>
     <div class="dv-tabs">${tabsHtml}</div>
-    ${(canConsult&&["medecin","specialiste"].includes(u.role))?`<div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0">
-      <button class="btn bs bsm" onclick="showDemandeAvisModal('${p.id}', d=>{DB.demandes_avis.push(d);saveDB(DB,{table:'demandes_avis',rows:[Object.assign({},d,{patient_id:d.patientId})]});})" title="Demande d'avis spécialisé">❤️ Avis spécialisé</button>
-    </div>`:""}
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0;flex-wrap:wrap">
+      ${(canConsult&&["medecin","specialiste"].includes(u.role))?`<button class="btn bs bsm" onclick="showDemandeAvisModal('${p.id}', d=>{DB.demandes_avis.push(d);saveDB(DB,{table:'demandes_avis',rows:[Object.assign({},d,{patient_id:d.patientId})]});})" title="Demande d'avis spécialisé">❤️ Avis spécialisé</button>`:""}
+      ${(["medecin","specialiste","admin"].includes(u.role)&&!p.userId)?`<button class="btn bp bsm" onclick="activerAccesMobile('${p.id}')">📱 Activer accès mobile</button>`:""}
+      ${(["medecin","specialiste","admin"].includes(u.role)&&p.userId)?`<button class="btn bs bsm" onclick="printFicheAcces('${p.userId}')">🖨️ Fiche accès</button>`:""}
+      ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="showEditPatient('${p.id}')">✏️ Modifier</button>`:""}
+    </div>
     <div id="dossier-content"></div>`;
   renderDossierTab();
 }
@@ -4482,7 +4482,223 @@ function delUser(uid2){if(!confirm("Supprimer ?"))return;DB.users=DB.users.filte
 function rAcces(){const patients=DB.patients;const profs=DB.users.filter(u=>!["patient","admin"].includes(u.role));const matrixHead=`<div style="display:grid;grid-template-columns:160px ${profs.map(()=>"1fr").join(" ")};background:var(--g50);border-bottom:2px solid var(--g200)"><div style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase">Patient</div>${profs.map(u=>`<div style="padding:10px 4px;font-size:9px;font-weight:700;color:var(--g500);text-transform:uppercase;text-align:center">${u.initials}<br/><span style="font-weight:400;text-transform:none">${u.nom}</span></div>`).join("")}</div>`;const matrixRows=patients.map(p=>`<div style="display:grid;grid-template-columns:160px ${profs.map(()=>"1fr").join(" ")};border-bottom:1px solid var(--g100)"><div style="padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px" onclick="openDossier('${p.id}')">${p.prenom} ${p.nom}</div>${profs.map(u=>{const acc=DB.access.find(a=>a.patientId===p.id&&a.userId===u.id);return `<div style="padding:10px 4px;text-align:center;font-size:16px">${acc?(acc.type==="medecin_ref"?"🔵":acc.type==="orientation"?"🟢":"🟡"):"—"}</div>`;}).join("")}</div>`).join("");G("pg-acces").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Matrice des accès</div><div class="sec-sub">Vue globale des habilitations</div></div></div><div style="margin-bottom:12px;font-size:12px;color:var(--g500);display:flex;gap:16px">🔵 Médecin référent &nbsp; 🟢 Orientation &nbsp; 🟡 Prescription</div><div style="border:1px solid var(--g200);border-radius:var(--rL);overflow:auto;margin-bottom:20px">${matrixHead}${matrixRows}</div><div class="sec-hd"><div><div class="sec-tit">Tous les accès (${DB.access.length})</div></div></div><div class="card"><table class="tbl"><thead><tr><th>Patient</th><th>Professionnel</th><th>Type</th><th>Modules</th><th>Depuis</th><th>Expiration</th><th>Action</th></tr></thead><tbody>${DB.access.map(a=>{const p=DB.patients.find(x=>x.id===a.patientId);const u=DB.users.find(x=>x.id===a.userId);return `<tr><td style="font-weight:700">${p?p.prenom+" "+p.nom:"—"}</td><td>${u?u.prenom+" "+u.nom:"—"}</td><td>${bdg({medecin_ref:"Médecin réf.",orientation:"Orientation",prescription:"Prescription",consentement:"Consentement"}[a.type]||a.type,a.type==="medecin_ref"?"bb":"bgn")}</td><td style="font-size:12px;color:var(--g500)">${a.modules.includes("all")?"Complet":a.modules.join(", ")}</td><td style="font-size:12px;color:var(--g400)">${a.date||"—"}</td><td style="font-size:12px;color:var(--g400)">${a.expiry||"Permanent"}</td><td><button class="btn bd bsm" onclick="delAccess2('${a.id}')">Révoquer</button></td></tr>`;}).join("")}</tbody></table></div>`;}
 function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);rAcces();}
 
-function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Administration</div></div></div><div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div>${bdg(DB.patients.length+" patients","bb")}</div>${DB.patients.map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans · ${(p.pathologies||[]).join(", ")||"—"}</div></div><button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button></div>`).join("")}<div style="margin-top:12px"><button class="btn bp" style="width:100%" onclick="showAddPatient()">+ Nouveau patient</button></div></div><div><div class="card" style="margin-bottom:16px"><div class="ch"><div class="ctit"><span class="ci">👤</span> Utilisateurs par rôle</div></div>${Object.entries(ROLE_CFG).map(([k,v])=>{const count=DB.users.filter(u=>u.role===k).length;return `<div class="ur"><div style="width:34px;height:34px;border-radius:50%;background:${v.c}22;display:flex;align-items:center;justify-content:center;font-size:16px">${v.i}</div><div style="flex:1"><div class="ur-name">${v.l}</div></div>${bdg(count+" compte(s)","bgr")}</div>`;}).join("")}</div><div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">💾</span> Sauvegarde & Restauration</div></div>
+function rAccesMobile(filterMois, filterDr, filterStatut) {
+  // Récupérer tous les accès mobiles depuis Supabase
+  supaFetch("patient_access?type=eq.acces_mobile&select=*").then(rows => {
+    if (!rows) rows = [];
+
+    // Enrichir avec données patient et médecin
+    const acces = rows.map(r => {
+      const pat = DB.patients.find(p => p.id === r.patient_id) || {};
+      const dr = DB.users.find(u => u.id === r.active_par) || {};
+      return Object.assign({}, r, {
+        patNom: pat.prenom + " " + pat.nom,
+        patPath: (pat.pathologies||[]).join(", ") || "—",
+        drNom: (dr.titre ? dr.titre + " " : "") + dr.prenom + " " + dr.nom,
+        drSpec: dr.spec || "",
+        drId: r.active_par
+      });
+    });
+
+    // Filtres
+    const moisList = [...new Set(acces.map(a => a.date_activation ? a.date_activation.substring(3) : ""))].filter(Boolean).sort().reverse();
+    const drList = [...new Set(acces.map(a => a.drId))].filter(Boolean);
+    const selectedMois = filterMois || (moisList[0] || "");
+    const selectedDr = filterDr || "";
+    const selectedStatut = filterStatut || "tous";
+
+    let filtered = acces;
+    if (selectedMois) filtered = filtered.filter(a => a.date_activation && a.date_activation.substring(3) === selectedMois);
+    if (selectedDr) filtered = filtered.filter(a => a.drId === selectedDr);
+    if (selectedStatut === "attente") filtered = filtered.filter(a => !a.facture);
+    if (selectedStatut === "facture") filtered = filtered.filter(a => a.facture);
+
+    const total = filtered.length;
+    const factures = filtered.filter(a => a.facture).length;
+    const attente = total - factures;
+
+    // Grouper par médecin
+    const groups = {};
+    filtered.forEach(a => {
+      if (!groups[a.drId]) groups[a.drId] = {drNom:a.drNom, drSpec:a.drSpec, items:[]};
+      groups[a.drId].items.push(a);
+    });
+
+    let html = `<div style="padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:18px;font-weight:900">📱 Accès mobiles patients</div>
+      </div>
+
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div class="card" style="text-align:center;padding:14px">
+          <div style="font-size:24px;font-weight:900">${total}</div>
+          <div style="font-size:11px;color:var(--g400)">Total accès</div>
+        </div>
+        <div class="card" style="text-align:center;padding:14px">
+          <div style="font-size:24px;font-weight:900;color:#DC2626">${attente}</div>
+          <div style="font-size:11px;color:var(--g400)">En attente</div>
+        </div>
+        <div class="card" style="text-align:center;padding:14px">
+          <div style="font-size:24px;font-weight:900;color:#16A34A">${factures}</div>
+          <div style="font-size:11px;color:var(--g400)">Facturés</div>
+        </div>
+      </div>
+
+      <!-- Filtres -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <select onchange="rAccesMobile(this.value,'${selectedDr}','${selectedStatut}')" style="border:1.5px solid var(--g200);border-radius:8px;padding:6px 10px;font-size:13px">
+          <option value="">Tous les mois</option>
+          ${moisList.map(m => `<option value="${m}" ${m===selectedMois?"selected":""}>${m}</option>`).join("")}
+        </select>
+        <select onchange="rAccesMobile('${selectedMois}',this.value,'${selectedStatut}')" style="border:1.5px solid var(--g200);border-radius:8px;padding:6px 10px;font-size:13px">
+          <option value="">Tous les médecins</option>
+          ${drList.map(id => { const d=DB.users.find(u=>u.id===id)||{}; return `<option value="${id}" ${id===selectedDr?"selected":""}>${(d.titre?d.titre+" ":"")+d.prenom+" "+d.nom}</option>`; }).join("")}
+        </select>
+        <button class="btn bs bsm ${selectedStatut==="tous"?"bp":""}" onclick="rAccesMobile('${selectedMois}','${selectedDr}','tous')">Tous</button>
+        <button class="btn bs bsm ${selectedStatut==="attente"?"bp":""}" onclick="rAccesMobile('${selectedMois}','${selectedDr}','attente')">En attente</button>
+        <button class="btn bs bsm ${selectedStatut==="facture"?"bp":""}" onclick="rAccesMobile('${selectedMois}','${selectedDr}','facture')">Facturés</button>
+      </div>`;
+
+    // Blocs par médecin
+    Object.entries(groups).forEach(([drId, g]) => {
+      const tot = g.items.length;
+      const fac = g.items.filter(a=>a.facture).length;
+      const att = tot - fac;
+      html += `<div class="card" style="margin-bottom:14px;overflow:hidden">
+        <div class="ch" style="background:var(--g50)">
+          <div><div style="font-size:14px;font-weight:800">${g.drNom}</div><div style="font-size:11px;color:var(--g400)">${g.drSpec}</div></div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:700">${tot} accès</div>
+            <div style="font-size:11px;color:#DC2626">${att} en attente</div>
+            <div style="font-size:11px;color:#16A34A">${fac} facturés</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--g50)">
+            <th style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--g400);text-align:left;border-bottom:1px solid var(--g100)">Patient</th>
+            <th style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--g400);text-align:left;border-bottom:1px solid var(--g100)">Activation</th>
+            <th style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--g400);text-align:left;border-bottom:1px solid var(--g100)">Facturation</th>
+            <th style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--g400);text-align:center;border-bottom:1px solid var(--g100)">Statut</th>
+            <th style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--g400);text-align:center;border-bottom:1px solid var(--g100)">Facturé</th>
+          </tr></thead>
+          <tbody>
+            ${g.items.map(a => `<tr style="background:${a.facture?"#F0FDF4":"white"}">
+              <td style="padding:10px 12px;border-bottom:1px solid var(--g100)">
+                <div style="font-weight:700;font-size:13px">${a.patNom}</div>
+                <div style="font-size:11px;color:var(--g400)">${a.patPath}</div>
+              </td>
+              <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid var(--g100)">${a.date_activation||"—"}</td>
+              <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid var(--g100);color:${a.facture?"#16A34A":"var(--g300)"}"><b>${a.facture_date||"—"}</b></td>
+              <td style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--g100)">${a.facture?bdg("✅ Facturé","bgn"):bdg("⏳ En attente","ba")}</td>
+              <td style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--g100)">
+                <input type="checkbox" ${a.facture?"checked":""} onchange="toggleFacture('${a.id}',this.checked,'${selectedMois}','${selectedDr}','${selectedStatut}')"
+                  style="width:18px;height:18px;cursor:pointer;accent-color:#16A34A"/>
+              </td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+        <div style="padding:10px 12px;background:var(--g50);border-top:2px solid var(--g100);display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:700">Total : ${tot} accès · <span style="color:#16A34A">${fac} facturés</span> · <span style="color:#DC2626">${att} en attente</span></div>
+          <button class="btn bs bsm" onclick="printRecapAcces('${drId}','${selectedMois}')">🖨️ Récap ${g.drNom}</button>
+        </div>
+      </div>`;
+    });
+
+    if (Object.keys(groups).length === 0) {
+      html += `<div class="card" style="text-align:center;padding:40px;color:var(--g400)">Aucun accès mobile activé</div>`;
+    }
+
+    html += `</div>`;
+    G("pg-admin").innerHTML = `<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="rAdmin()">← Administration</button></div>` + html;
+  });
+}
+
+async function toggleFacture(accessId, checked, filterMois, filterDr, filterStatut) {
+  const a = DB.access.find(x => x.id === accessId);
+  if (!a) return;
+  a.facture = checked;
+  a.facture_date = checked ? today() : null;
+  await supaFetch("patient_access?id=eq." + accessId, {
+    method: "PATCH",
+    body: JSON.stringify({facture: checked, facture_date: a.facture_date})
+  });
+  rAccesMobile(filterMois, filterDr, filterStatut);
+}
+
+function printRecapAcces(drId, mois) {
+  supaFetch("patient_access?type=eq.acces_mobile&active_par=eq." + drId + "&select=*").then(rows => {
+    if (!rows) rows = [];
+    const dr = DB.users.find(u => u.id === drId) || {};
+    const titreDr = (dr.titre ? dr.titre + " " : "") + (dr.prenom||"") + " " + (dr.nom||"");
+    const filtered = mois ? rows.filter(r => r.date_activation && r.date_activation.substring(3) === mois) : rows;
+    const factures = filtered.filter(r => r.facture).length;
+    const attente = filtered.length - factures;
+
+    const rowsHtml = filtered.map(r => {
+      const pat = DB.patients.find(p => p.id === r.patient_id) || {};
+      return `<tr style="background:${r.facture?"#F0FDF4":"white"}">
+        <td style="padding:8px 10px;border-bottom:1px solid #F1F5F9;font-weight:600">${pat.prenom||""} ${pat.nom||""}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #F1F5F9;font-size:11px;color:#64748B">${(pat.pathologies||[]).join(", ")||"—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #F1F5F9">${r.date_activation||"—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #F1F5F9;color:${r.facture?"#16A34A":"#94A3B8"};font-weight:600">${r.facture_date||"—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #F1F5F9">
+          <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${r.facture?"#DCFCE7":"#FEE2E2"};color:${r.facture?"#16A34A":"#DC2626"}">${r.facture?"✅ Facture":"⏳ En attente"}</span>
+        </td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recap Acces Mobiles</title>
+    <style>*{box-sizing:border-box;font-family:Arial,sans-serif;margin:0;padding:0}body{padding:24px;color:#0F172A}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #1A6EFF;margin-bottom:20px}
+    .logo{font-size:20px;font-weight:900}.logo span{color:#1A6EFF}.logo-sub{font-size:11px;color:#64748B;margin-top:2px}
+    .doc-title{text-align:right;font-size:14px;font-weight:800;color:#1A6EFF}
+    .doc-meta{font-size:11px;color:#64748B;margin-top:4px}
+    .dr-box{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between}
+    .dr-name{font-size:15px;font-weight:800}.dr-spec{font-size:12px;color:#64748B}.period{color:#1A6EFF;font-weight:700}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    thead tr{background:#1A6EFF}th{color:white;padding:8px 10px;font-size:11px;text-align:left}
+    td{padding:8px 10px;font-size:12px}tr:nth-child(even){background:#F8FAFC}
+    .summary{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center}
+    .sum-val{font-size:22px;font-weight:900}.sum-lbl{font-size:10px;color:#64748B}
+    .footer{display:flex;justify-content:space-between;align-items:flex-end;padding-top:16px;border-top:1px solid #E2E8F0}
+    .footer-note{font-size:10px;color:#94A3B8;font-style:italic}
+    .sig-box{text-align:center;font-size:10px;color:#64748B}
+    .sig-line{width:100px;height:50px;border:1px dashed #CBD5E1;border-radius:4px;margin:6px auto}
+    button{background:#1A6EFF;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;display:block;margin:0 auto 20px}
+    @media print{button{display:none}}</style></head><body>
+    <button onclick="window.print()">🖨️ Imprimer / PDF</button>
+    <div class="header">
+      <div><div class="logo">Medi<span>Report</span></div><div class="logo-sub">Systeme de gestion medicale</div></div>
+      <div><div class="doc-title">📱 Recapitulatif acces mobiles</div><div class="doc-meta">Imprime le ${today()} | Par : ${currentUser.prenom} ${currentUser.nom}</div></div>
+    </div>
+    <div class="dr-box">
+      <div><div class="dr-name">${titreDr}</div><div class="dr-spec">${dr.spec||""}</div></div>
+      <div class="period">${mois||"Tous"}</div>
+    </div>
+    <table>
+      <thead><tr><th>Patient</th><th>Pathologies</th><th>Date activation</th><th>Date facturation</th><th>Statut</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="summary">
+      <div><div class="sum-val">${filtered.length}</div><div class="sum-lbl">Total acces</div></div>
+      <div><div class="sum-val" style="color:#16A34A">${factures}</div><div class="sum-lbl">Factures</div></div>
+      <div><div class="sum-val" style="color:#DC2626">${attente}</div><div class="sum-lbl">En attente</div></div>
+    </div>
+    <div class="footer">
+      <div class="footer-note">MediReport · medireport-kappa.vercel.app</div>
+      <div class="sig-box">Cachet &amp; signature admin<div class="sig-line"></div></div>
+    </div>
+    </body></html>`;
+
+    const w = window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+  });
+}
+
+function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Administration</div></div></div><div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div>${bdg(DB.patients.length+" patients","bb")}</div>${DB.patients.map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans · ${(p.pathologies||[]).join(", ")||"—"}</div></div><button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button></div>`).join("")}<div style="margin-top:12px"><button class="btn bp" style="width:100%" onclick="showAddPatient()">+ Nouveau patient</button></div></div><div><div class="card" style="margin-bottom:16px"><div class="ch"><div class="ctit"><span class="ci">👤</span> Utilisateurs par rôle</div></div>${Object.entries(ROLE_CFG).map(([k,v])=>{const count=DB.users.filter(u=>u.role===k).length;return `<div class="ur"><div style="width:34px;height:34px;border-radius:50%;background:${v.c}22;display:flex;align-items:center;justify-content:center;font-size:16px">${v.i}</div><div style="flex:1"><div class="ur-name">${v.l}</div></div>${bdg(count+" compte(s)","bgr")}</div>`;}).join("")}</div><div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">📱</span> Accès mobiles</div><button class="btn bp bsm" onclick="rAccesMobile()">Voir le tableau</button></div><div id="acces-mobile-preview"></div></div>
+<div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">💾</span> Sauvegarde & Restauration</div></div>
   <div style="font-size:12px;color:var(--g500);margin-bottom:12px">
     Dernière sauvegarde : <strong id="last-backup-date">—</strong>
   </div>
@@ -4501,7 +4717,7 @@ function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="
   </div>
   <div style="margin-top:10px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
 </div>
-<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div><button class="btn bd" style="width:100%;justify-content:center;margin-bottom:10px" onclick="if(confirm('Réinitialiser TOUTES les données ?')){localStorage.removeItem('medirecord_db');localStorage.removeItem('medirecord_db_version');location.reload();}">🗑 Réinitialiser la base de données</button><div style="font-size:11px;color:var(--g400)">Supprime toutes les données et restaure la démo.</div></div></div></div>`;}
+<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div><button class="btn bd" style="width:100%;justify-content:center;margin-bottom:10px" onclick="if(confirm('Réinitialiser TOUTES les données ?')){localStorage.removeItem('medirecord_db');location.reload();}">🗑 Réinitialiser la base de données</button><div style="font-size:11px;color:var(--g400)">Supprime toutes les données et restaure la démo.</div></div></div></div>`;}
 
 function showAddPatient(){
   // ── Étape 1 : Recherche doublon avant création ────────────
@@ -4674,14 +4890,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     const pid=uid();
     const drId=currentUser.id;
 
-    // ── Créer compte utilisateur patient ──
-    const newPin=generatePIN();
-    const newLogin=(pr[0]+"."+nm).toLowerCase().replace(/[^a-z0-9.]/g,"");
-    const newUserId=uid();
-    const newUser={id:newUserId,prenom:pr,nom:nm,role:"patient",spec:"",structure:"",color,initials,pin:newPin,login:newLogin,patientId:pid};
-    DB.users.push(newUser);
-
-    // ── Créer dossier patient ──
+    // ── Créer dossier patient (sans login ni PIN — accès activé après paiement) ──
     DB.patients.push({
       id:pid, nom:nm, prenom:pr, dob, age,
       sexe:sx,
@@ -4694,7 +4903,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
       groupe:grp,
       allergies:alg, antecedents:ant, pathologies:[],
       medecin_ref:drId||currentUser.id, color, initials,
-      userId:newUserId,
+      userId:null,
       consentement:{date:today(),medecin:currentUser.id,accorde:true,version:"v1.0"}
     });
     DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];
@@ -4705,12 +4914,6 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
 
     saveDB(DB);ov2.remove();
     if(currentPage==="admin")rAdmin();else rPatients();
-
-    // ── Proposer fiche d'accès immédiatement ──
-    setTimeout(()=>{
-      if(confirm("Imprimer la fiche d\'accès pour "+pr+" "+nm+" ?"))
-        printFicheAccesFromData(pid,pr,nm,newLogin,newPin,dob,grp);
-    },300);
     });
   };
 }
@@ -5553,7 +5756,7 @@ function showAccessLog(filterDays){
 // ══════════════════════════════════════════════════════════
 function backupDB(){
   const backup = {
-    version: DB_VERSION,
+    version: "3.0",
     date: today(),
     timestamp: new Date().toISOString(),
     data: DB
@@ -5600,7 +5803,7 @@ function restoreDB(){
         if(!confirm(`Restaurer le backup du ${backup.date} ?\n\nCela remplacera TOUTES les données actuelles.\n\nContinuer ?`)) return;
         // Restore
         localStorage.setItem("medirecord_db", JSON.stringify(backup.data));
-        localStorage.setItem("medirecord_db_version", backup.version);
+        // version ignorée
         localStorage.setItem("medirecord_last_backup", new Date().toISOString());
         alert("✅ Backup restauré avec succès. L'application va se recharger.");
         location.reload();
@@ -5814,6 +6017,37 @@ document.addEventListener("keydown",(e)=>{
 
 
 // ── FICHE D'ACCÈS PATIENT ─────────────────────────────────
+function activerAccesMobile(pid) {
+  const p = DB.patients.find(x=>x.id===pid);
+  if(!p){ alert("Patient introuvable"); return; }
+  if(p.userId){ alert("L'accès mobile est déjà activé pour ce patient."); return; }
+
+  if(!confirm("Activer l'accès mobile pour "+p.prenom+" "+p.nom+" ?")) return;
+
+  const pr = p.prenom, nm = p.nom;
+  const newPin = generatePIN();
+  const newLogin = (pr[0]+"."+nm).toLowerCase().replace(/[^a-z0-9.]/g,"");
+  const newUserId = uid();
+  const initials = (pr[0]+(nm[0]||"")).toUpperCase();
+  const color = p.color || "#1A6EFF";
+
+  const newUser = {id:newUserId, prenom:pr, nom:nm, role:"patient", spec:"", structure:"", color, initials, pin:newPin, login:newLogin, patientId:pid};
+  DB.users.push(newUser);
+  p.userId = newUserId;
+
+  saveDB(DB, {table:"users", rows:[newUser]});
+  saveDB(DB, {table:"patients", rows:[Object.assign({},p,{user_id:newUserId})]});
+
+  // Enregistrer l'activation dans patient_access
+  const accessLog = {id:uid(), patientId:pid, userId:newUserId, type:"acces_mobile", date:today(), active_par:currentUser.id, date_activation:today(), facture:false, facture_date:null};
+  DB.access.push(accessLog);
+  saveDB(DB, {table:"patient_access", rows:[Object.assign({},accessLog,{patient_id:pid,user_id:newUserId,active_par:currentUser.id,date_activation:today(),facture:false})]});
+
+  // Rafraîchir dossier et imprimer fiche accès
+  renderDossierTab();
+  setTimeout(()=>{ printFicheAccesFromData(pid, pr, nm, newLogin, newPin, p.dob, p.groupe); }, 300);
+}
+
 function printFicheAcces(userId){
   const u = DB.users.find(x=>x.id===userId);
   if(!u||u.role!=="patient"){ alert("Utilisateur patient introuvable"); return; }
