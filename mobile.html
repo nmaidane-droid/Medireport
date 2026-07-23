@@ -878,6 +878,34 @@ function printBilanMobile() {
   var p = PAT;
   if (!p) return;
 
+  // Si données pas encore chargées depuis Supabase, les charger d'abord
+  var hasData = DB.consultations && DB.consultations[p.id] && DB.consultations[p.id].length;
+  if (!hasData) {
+    var pid = p.id;
+    var loaded = 0; var total = 4;
+    function done() {
+      loaded++;
+      if (loaded >= total) printBilanMobile();
+    }
+    supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.consultations=DB.consultations||{}; DB.consultations[pid]=rows; }
+      done();
+    });
+    supaGet("labos?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.labos=DB.labos||{}; DB.labos[pid]=rows.map(function(l){ return Object.assign({},l,{patientId:l.patient_id,res:l.resultats||[]}); }); }
+      done();
+    });
+    supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.imagerie=DB.imagerie||{}; DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{cr:i.conclusion,res:i.resultat}); }); }
+      done();
+    });
+    supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.rx=DB.rx||{}; DB.rx[pid]=rows.map(function(r){ return Object.assign({},r,{patientId:r.patient_id,s:r.statut}); }); }
+      done();
+    });
+    return;
+  }
+
   var cons = (DB.consultations[p.id]||[]).slice(0,3);
   var labos = (DB.labos[p.id]||[]).slice(0,2);
   var imgs = (DB.imagerie[p.id]||[]).slice(0,2);
