@@ -892,7 +892,7 @@ function printBilanMobile() {
     return new Date(new Date().getFullYear(),m,parseInt(r.day))>=new Date();
   });
 
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">'
     +'<title>Mon bilan complet</title>'
     +'<style>*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}body{padding:16px;color:#0F172A;font-size:12px}'
     +'.header{border-bottom:2px solid #1A6EFF;padding-bottom:10px;margin-bottom:14px}'
@@ -939,20 +939,27 @@ function printBilanMobile() {
 
   // Consultations
   html += '<div class="sec-title">Dernières consultations</div>';
-  html += cons.length ? cons.map(function(c){return '<div class="card"><div class="card-date">'+c.date+' · '+(c.spec||"")+'</div><div class="card-title">'+(c.motif||"")+'</div><div class="card-body">'+(c.cr||"")+'</div></div>';}).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune consultation</div>';
+  html += cons.length ? cons.map(function(c){
+    var drNom = (function(id){ var u=DB.users.find(function(x){return x.id===id;}); return u?((u.titre?u.titre+" ":"")+u.prenom+" "+u.nom):id; })(c.dr||"");
+    return '<div class="card"><div class="card-date">'+c.date+' · '+drNom+' · '+(c.spec||"")+'</div><div class="card-title">'+(c.motif||"")+'</div><div class="card-body">'+(c.cr||"")+'</div></div>';
+  }).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune consultation</div>';
 
   // Labos
   html += '<div class="sec-title">Derniers résultats labo</div>';
   html += labos.length ? labos.map(function(l){
     var res = l.res||l.resultats||[];
-    return '<div class="card"><div class="card-date">'+l.date+' · '+(l.labo||"")+'</div>'
+    var laboNom = (function(id){ var u=DB.users.find(function(x){return x.id===id;}); return u?(u.structure||u.nom||id):id; })(l.labo||l.ref||"");
+    return '<div class="card"><div class="card-date">'+l.date+' · '+laboNom+'</div>'
       +res.map(function(r){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 0;border-bottom:1px solid #F1F5F9"><span>'+r.p+'</span><span class="'+(r.s==="bad"?"res-bad":r.s==="warn"?"res-warn":"res-ok")+'">'+r.v+' '+r.u+' <span style="color:#94A3B8">('+r.n+')</span></span></div>';}).join("")
       +'</div>';
   }).join("") : '<div style="color:#94A3B8;font-size:10px">Aucun résultat labo</div>';
 
   // Imagerie
   html += '<div class="sec-title">Imagerie</div>';
-  html += imgs.length ? imgs.map(function(i){return '<div class="card"><div class="card-date">'+i.date+' · '+(i.centre||"")+'</div><div class="card-title">'+(i.type||"")+'</div><div class="card-body">'+(i.conclusion||i.cr||"")+'</div></div>';}).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune imagerie</div>';
+  html += imgs.length ? imgs.map(function(i){
+    var centreNom = (function(id){ var u=DB.users.find(function(x){return x.id===id;}); return u?(u.structure||u.nom||id):id; })(i.centre||"");
+    return '<div class="card"><div class="card-date">'+i.date+' · '+centreNom+'</div><div class="card-title">'+(i.type||"")+'</div><div class="card-body">'+(i.conclusion||i.cr||"")+'</div></div>';
+  }).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune imagerie</div>';
 
   // Prochain RDV
   if(nextRdv){
