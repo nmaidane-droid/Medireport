@@ -690,12 +690,10 @@ function tabMed() {
     function pd(d){if(!d||d==="—")return 0;var p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;}
     return pd(b.date)-pd(a.date);
   });
-  // Debug temporaire
-  var refreshBtn='<div style="text-align:right;margin-bottom:10px"><button onclick="refreshPatientData()" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#64748B;font-family:inherit;cursor:pointer">🔄 Actualiser</button></div>';
-  if(!rx.length) return refreshBtn + emp("💊","Aucune prescription");
+  if(!rx.length) return emp("💊","Aucune prescription");
   var act=rx.filter(function(r){return r.s==="active";});
   var arr=rx.filter(function(r){return r.s==="stopped";});
-  var h=refreshBtn;
+  var h='';
   if(act.length) h+='<div class="stit">Traitements actuels ('+act.length+')</div>';
   act.forEach(function(r){
     var drRx = DB && DB.users ? DB.users.find(function(u){ return u.id === r.dr; }) : null;
