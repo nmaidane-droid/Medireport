@@ -581,11 +581,15 @@ function tabCon() {
     h+='<div id="'+bid+'" style="display:none;border-top:1px solid #F1F5F9;padding:14px">';
     if(c.cr) h+='<div style="font-size:13px;color:#334155;line-height:1.6;margin-bottom:10px">'+(c.cr||"").slice(0,500)+'</div>';
     if(c.constantes&&Object.keys(c.constantes).length){
-      h+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">';
       Object.entries(c.constantes).forEach(function(e){
         h+='<span style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:3px 8px;font-size:11px"><span style="color:#94A3B8">'+e[0]+'</span> <strong>'+e[1]+'</strong></span>';
       });
       h+='</div>';
+      // Bouton ordonnance lunettes si consultation ophtalmologique
+      if((c.spec||"").toLowerCase().indexOf("ophtalm")>=0){
+        h+='<button onclick="showOrdonnanceLunettes('+JSON.stringify(c).replace(/'/g,"\'").replace(/"/g,"&quot;")+')" style="background:#0BA896;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;margin-top:4px">👓 Mon ordonnance lunettes</button>';
+      }
     }
     h+='</div></div>';
   });
@@ -837,6 +841,77 @@ function showServiceUnavailable() {
 function refreshPatientData() {
   var activeTab = document.querySelector(".tab.on");
   if (activeTab) activeTab.click();
+}
+
+
+function showOrdonnanceLunettes(c) {
+  var p = PAT;
+  var dr = DB.users.find(function(u){ return u.id === c.dr; });
+  var titre = dr && dr.titre ? dr.titre + " " : "Dr. ";
+  var ct = c.constantes || {};
+
+  function row(label, od, og) {
+    return '<tr><td style="padding:8px;font-weight:600;background:#f8fafc;border:1px solid #e2e8f0">'+label+'</td>'
+      +'<td style="padding:8px;text-align:center;border:1px solid #e2e8f0">'+(od||"—")+'</td>'
+      +'<td style="padding:8px;text-align:center;border:1px solid #e2e8f0">'+(og||"—")+'</td></tr>';
+  }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>Ordonnance Lunettes</title>'
+    +'<style>*{font-family:Arial,sans-serif;font-size:13px}body{padding:16px;color:#1a1a2e}'
+    +'.header{border-bottom:2px solid #1A6EFF;padding-bottom:12px;margin-bottom:16px}'
+    +'.dr{font-size:16px;font-weight:700;color:#1A6EFF}'
+    +'.pat{background:#f0f7ff;border:1px solid #BFDBFE;border-radius:8px;padding:10px;margin-bottom:16px}'
+    +'h3{color:#1A6EFF;font-size:13px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:16px 0 8px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:12px}'
+    +'th{background:#1A6EFF;color:white;padding:6px;text-align:center;font-size:12px}'
+    +'.rec{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:12px}'
+    +'.footer{margin-top:20px;border-top:1px solid #e2e8f0;padding-top:12px;text-align:right}'
+    +'button{background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-bottom:12px}'
+    +'@media print{button{display:none}}'
+    +'</style></head><body>'
+    +'<button onclick="window.print()">🖨️ Imprimer / Enregistrer</button>'
+    +'<div class="header">'
+    +'<div class="dr">'+titre+(dr?dr.prenom+" "+dr.nom:"")+'</div>'
+    +'<div style="font-size:11px;color:#64748B">'+(dr?dr.spec||"":"")+'</div>'
+    +'<div style="font-size:11px;color:#64748B">'+(dr?dr.structure||"":"")+'</div>'
+    +'<div style="font-size:11px;color:#64748B">'+(dr?dr.adresse||"":"")+'</div>'
+    +'<div style="float:right;text-align:right;margin-top:-60px"><strong>👓 ORDONNANCE LUNETTES</strong><br/>'
+    +'<span style="font-size:11px;color:#64748B">Date : '+c.date+'</span><br/>'
+    +'<span style="font-size:11px;color:#64748B">Valable 1 an</span></div>'
+    +'<div style="clear:both"></div></div>'
+    +'<div class="pat"><strong>'+p.prenom+' '+p.nom+'</strong><br/>'
+    +'<span style="font-size:11px;color:#475569">Né(e) le '+p.dob+' · '+p.age+' ans</span></div>'
+    +'<h3>Correction — Vision de loin (VL)</h3>'
+    +'<table><thead><tr><th></th><th>OD (droit)</th><th>OG (gauche)</th></tr></thead><tbody>'
+    +row("Sphère", ct["Sphère OD"], ct["Sphère OG"])
+    +row("Cylindre", ct["Cylindre OD"], ct["Cylindre OG"])
+    +row("Axe", ct["Axe OD"], ct["Axe OG"])
+    +row("Acuité corrigée", ct["AV cc OD"], ct["AV cc OG"])
+    +'</tbody></table>';
+
+  if(ct["Addition VP"]){
+    html += '<h3>Addition — Vision de près (VP)</h3>'
+      +'<table><thead><tr><th></th><th>OD (droit)</th><th>OG (gauche)</th></tr></thead><tbody>'
+      +'<tr><td style="padding:8px;font-weight:600;background:#f8fafc;border:1px solid #e2e8f0">Addition</td>'
+      +'<td style="padding:8px;text-align:center;border:1px solid #e2e8f0">'+ct["Addition VP"]+'</td>'
+      +'<td style="padding:8px;text-align:center;border:1px solid #e2e8f0">'+ct["Addition VP"]+'</td></tr>'
+      +'</tbody></table>';
+  }
+
+  html += '<div class="rec">'
+    +(ct["Verres"]?'<strong>Type de verres :</strong> '+ct["Verres"]+'<br/>':'')
+    +(ct["Traitements"]?'<strong>Traitements :</strong> '+ct["Traitements"]+'<br/>':'')
+    +(c.cr?'<br/><em>'+c.cr+'</em>':'')
+    +'</div>'
+    +'<div class="footer">'
+    +'<div style="font-size:11px;color:#94a3b8;font-style:italic">Ordonnance valable 1 an à compter du '+c.date+'</div>'
+    +'<div style="margin-top:8px;font-weight:700">'+titre+(dr?dr.nom:"")+'</div>'
+    +'</div>'
+    +'</body></html>';
+
+  var w = window.open("","_blank");
+  if(w){ w.document.write(html); w.document.close(); }
 }
 
 </script>
