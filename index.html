@@ -6173,7 +6173,7 @@ body{background:#fff;padding:18mm;color:#0F172A;font-size:12px;line-height:1.5}
 <div class="section">
   <div class="sec-title">Derniers résultats labo</div>
   ${labos.length ? labos.map(l=>`<div class="labo-card">
-    <div class="labo-header"><span class="labo-date">${l.date}</span><span style="font-size:10px;color:#64748B">${l.labo||l.ref||""}</span></div>
+    <div class="labo-header"><span class="labo-date">${l.date}</span><span style="font-size:10px;color:#64748B">${(()=>{const u=DB.users.find(x=>x.id===l.labo);return u?(u.structure||u.nom):l.labo||l.ref||"";})()} </span></div>
     ${(l.res||l.resultats||[]).map(r=>`<div class="res-row"><span>${r.p}</span><span class="${r.s==="bad"?"res-bad":r.s==="warn"?"res-warn":"res-ok"}">${r.v} ${r.u} <span style="font-size:9px;color:#94A3B8">(${r.n})</span></span></div>`).join("")}
   </div>`).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucun résultat labo</div>"}
 </div>
@@ -6181,7 +6181,7 @@ body{background:#fff;padding:18mm;color:#0F172A;font-size:12px;line-height:1.5}
 <div class="section">
   <div class="sec-title">Imagerie</div>
   ${imgs.length ? imgs.map(i=>`<div class="img-card">
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;font-weight:700;color:#1A6EFF">${i.date}</span><span style="font-size:10px;color:#64748B">${i.centre||""}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;font-weight:700;color:#1A6EFF">${i.date}</span><span style="font-size:10px;color:#64748B">${(()=>{const u=DB.users.find(x=>x.id===i.centre);return u?(u.structure||u.nom):i.centre||"";})()} </span></div>
     <div style="font-size:11px;font-weight:700;margin-bottom:3px">${i.type||""}</div>
     <div style="font-size:10px;color:#475569">${i.conclusion||i.cr||""}</div>
   </div>`).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucune imagerie</div>"}
