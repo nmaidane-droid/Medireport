@@ -505,6 +505,37 @@ const NAV_CFG = {
 // Default data
 const DB_VERSION = "2.0";
 
+// ── Seen items — Supabase ──────────────────────────────────
+var _seenCache = {}; // cache local pour éviter trop de requêtes
+
+async function markSeenSupabase(userId, itemId, itemType) {
+  try {
+    await supaFetch("seen_items", {
+      method: "POST",
+      body: JSON.stringify({user_id: userId, item_id: itemId, item_type: itemType})
+    });
+    if (!_seenCache[userId]) _seenCache[userId] = {};
+    if (!_seenCache[userId][itemType]) _seenCache[userId][itemType] = [];
+    if (!_seenCache[userId][itemType].includes(itemId)) _seenCache[userId][itemType].push(itemId);
+  } catch(e) {}
+}
+
+async function loadSeenSupabase(userId) {
+  try {
+    const rows = await supaFetch("seen_items?user_id=eq."+userId+"&select=item_id,item_type");
+    if (!rows) return;
+    _seenCache[userId] = {};
+    rows.forEach(r => {
+      if (!_seenCache[userId][r.item_type]) _seenCache[userId][r.item_type] = [];
+      _seenCache[userId][r.item_type].push(r.item_id);
+    });
+  } catch(e) {}
+}
+
+function isSeen(userId, itemId, itemType) {
+  return (_seenCache[userId]?.[itemType] || []).includes(itemId);
+}
+
 async function loadDBFromSupabase(){
   try {
     const [users, patients, access, consultations, labos, rdv, prescriptions, imagerie, demandesLabo, demandesAvis] = await Promise.all([
@@ -995,6 +1026,8 @@ function doLogin(){
     const freshUser = DB.users.find(u=>(u.login||"").toLowerCase()===loginVal) || user;
     currentUser = freshUser;
 
+    // Charger les seen items depuis Supabase
+    loadSeenSupabase(freshUser.id).then(()=>{ renderApp(); });
     if(!DB.logs) DB.logs=[];
     DB.logs.push({
       type:"connexion",
@@ -1039,13 +1072,13 @@ function getNotifications(){
   const patients = getAccessiblePatients(u.id);
 
   // 0. Nouveaux résultats labo
-  const myNewLabo=(DB.demandes_labo||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_labo_"+u.id)||"[]").includes(d.id));
+  const myNewLabo=(DB.demandes_labo||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!isSeen(u.id, d.id, "labo"));
   myNewLabo.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
     notifs.push({type:"labo",icon:"🧪",color:"var(--green)",title:"Résultats labo disponibles",body:`Réf: ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",key:"labo_"+d.id,action:()=>openDossier(d.patientId)});
   });
   // 0b. Nouveaux avis spécialisés
-  const myNewAvis=(DB.demandes_avis||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!JSON.parse(localStorage.getItem("seen_avis_"+u.id)||"[]").includes(d.id));
+  const myNewAvis=(DB.demandes_avis||[]).filter(d=>d.medecin===u.id&&d.statut==="traite"&&!isSeen(u.id, d.id, "avis"));
   myNewAvis.forEach(d=>{
     const p2=DB.patients.find(x=>x.id===d.patientId);
     notifs.push({type:"avis",icon:"❤️",color:"var(--purple)",title:"Rapport spécialiste disponible",body:`${d.specialite} — ${d.ref}`,patientId:d.patientId,patient:p2?p2.prenom+" "+p2.nom:"—",key:"avis_"+d.id,action:()=>openDossier(d.patientId)});
@@ -1453,12 +1486,10 @@ function printConvocation(pid, rdvObj){
 
 
 function markSeenLabo(id, userId){
-  const seen = JSON.parse(localStorage.getItem("seen_labo_"+userId)||"[]");
-  if(!seen.includes(id)){ seen.push(id); localStorage.setItem("seen_labo_"+userId, JSON.stringify(seen)); }
+  markSeenSupabase(userId, id, "labo");
 }
 function markSeenAvis(id, userId){
-  const seen = JSON.parse(localStorage.getItem("seen_avis_"+userId)||"[]");
-  if(!seen.includes(id)){ seen.push(id); localStorage.setItem("seen_avis_"+userId, JSON.stringify(seen)); }
+  markSeenSupabase(userId, id, "avis");
 }
 function goBack(){
   const nav=ROLE_CFG[currentUser.role].nav;
@@ -1896,11 +1927,11 @@ function rDashboard(){
   const myLaboReturns = (DB.demandes_labo||[]).filter(d=>d.medecin===u.id&&d.statut==="traite");
   const myAvisReturns = (DB.demandes_avis||[]).filter(d=>d.medecin===u.id&&d.statut==="traite");
   const newLaboReturns = myLaboReturns.filter(d=>{
-    const seen=JSON.parse(localStorage.getItem("seen_labo_"+u.id)||"[]");
+    const seen=(_seenCache[u.id]?.labo||[]);
     return !seen.includes(d.id);
   });
   const newAvisReturns = myAvisReturns.filter(d=>{
-    const seen=JSON.parse(localStorage.getItem("seen_avis_"+u.id)||"[]");
+    const seen=(_seenCache[u.id]?.avis||[]);
     return !seen.includes(d.id);
   });
   const returnsHtml = (u.role==="medecin"||u.role==="specialiste") ? `
@@ -2250,7 +2281,11 @@ function dSynthese(){
 
 function dConsultations(){
   const p=DB.patients.find(x=>x.id===currentPatientId);const u=currentUser;const isMed=["medecin","specialiste","admin"].includes(u.role);const cons=DB.consultations[p.id]||[];
-  const html=cons.map(c=>`<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div></div><span style="color:var(--g300);font-size:18px">›</span></div></div>`).join("");
+  const html=cons.map(c=>{
+    const isOphtalm = (c.spec||"").toLowerCase().includes("ophtalm");
+    const ophBtn = isOphtalm && c.constantes ? `<button onclick="event.stopPropagation();printOrdonnanceLunettes('${c.id}','${p.id}')" style="background:#0BA896;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">👓 Ordonnance lunettes</button>` : "";
+    return `<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
+  }).join("");
   // Show pending demandes
   const demLabo = (DB.demandes_labo||[]).filter(d=>d.patientId===p.id);
   const demAvis = (DB.demandes_avis||[]).filter(d=>d.patientId===p.id);
@@ -3235,12 +3270,55 @@ function showAddConsult(pid){
 
     if(s.includes("ophtalm")||s.includes("oeil")||s.includes("œil")){
       return `
-        <div style="font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👁️ Paramètres ophtalmologiques</div>
+        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👁️ Réfraction</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--g500);padding-top:22px"></div>
+          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Sphère</div>
+          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Cylindre</div>
+          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Axe (°)</div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue)">OD</div>
+          <div class="fg" style="margin:0"><input id="fc-sph-od" placeholder="Ex: +1.25"/></div>
+          <div class="fg" style="margin:0"><input id="fc-cyl-od" placeholder="Ex: -0.50"/></div>
+          <div class="fg" style="margin:0"><input id="fc-axe-od" placeholder="Ex: 90"/></div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue)">OG</div>
+          <div class="fg" style="margin:0"><input id="fc-sph-og" placeholder="Ex: +1.50"/></div>
+          <div class="fg" style="margin:0"><input id="fc-cyl-og" placeholder="Ex: -0.75"/></div>
+          <div class="fg" style="margin:0"><input id="fc-axe-og" placeholder="Ex: 85"/></div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👁️ Acuité visuelle</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+          <div></div>
+          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Sans correction</div>
+          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Avec correction</div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue)">OD</div>
+          <div class="fg" style="margin:0"><input id="fc-avsc-od" placeholder="Ex: 4/10"/></div>
+          <div class="fg" style="margin:0"><input id="fc-avod" placeholder="Ex: 7/10"/></div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue)">OG</div>
+          <div class="fg" style="margin:0"><input id="fc-avsc-og" placeholder="Ex: 3/10"/></div>
+          <div class="fg" style="margin:0"><input id="fc-avog" placeholder="Ex: 6/10"/></div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-          <div class="fg" style="margin:0"><label>Acuité visuelle OD</label><input id="fc-avod" placeholder="Ex : 8/10"/></div>
-          <div class="fg" style="margin:0"><label>Acuité visuelle OG</label><input id="fc-avog" placeholder="Ex : 7/10"/></div>
-          <div class="fg" style="margin:0"><label>Tension oculaire OD (mmHg)</label><input id="fc-tood" placeholder="Ex : 16"/></div>
-          <div class="fg" style="margin:0"><label>Tension oculaire OG (mmHg)</label><input id="fc-toog" placeholder="Ex : 15"/></div>
+          <div class="fg" style="margin:0"><label>Addition VP (presbytie)</label><input id="fc-add" placeholder="Ex: +2.50"/></div>
+          <div class="fg" style="margin:0"><label>Tension OD (mmHg)</label><input id="fc-tood" placeholder="Ex: 16"/></div>
+          <div class="fg" style="margin:0"><label>Tension OG (mmHg)</label><input id="fc-toog" placeholder="Ex: 15"/></div>
+          <div class="fg" style="margin:0"><label>Port de correction actuel</label>
+            <select id="fc-port"><option value="">—</option><option>Aucun</option><option>Lunettes VL</option><option>Lunettes VP</option><option>Lunettes progressives</option><option>Lentilles</option></select>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔬 Examen clinique</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+          <div class="fg" style="margin:0"><label>Segment antérieur</label>
+            <select id="fc-seg-ant"><option value="">—</option><option>Normal</option><option>Cataracte débutante</option><option>Cataracte évoluée</option><option>Kératocône</option><option>Autre</option></select>
+          </div>
+          <div class="fg" style="margin:0"><label>Fond d'œil</label>
+            <select id="fc-fdo"><option value="">—</option><option>Normal</option><option>Rétinopathie diabétique débutante</option><option>Rétinopathie diabétique modérée</option><option>Rétinopathie diabétique sévère</option><option>DMLA</option><option>Glaucome</option><option>Autre</option></select>
+          </div>
+          <div class="fg" style="margin:0"><label>Type de verres recommandé</label>
+            <select id="fc-verres"><option value="">—</option><option>Unifocaux VL</option><option>Unifocaux VP</option><option>Progressifs</option><option>Dégressifs</option><option>Bifocaux</option></select>
+          </div>
+          <div class="fg" style="margin:0"><label>Traitements recommandés</label>
+            <select id="fc-trait"><option value="">—</option><option>Antireflet</option><option>Antireflet + UV</option><option>Photochromique</option><option>Antireflet + Photochromique</option><option>Amincissement</option></select>
+          </div>
         </div>`;
     }
 
@@ -3556,10 +3634,24 @@ function showAddConsult(pid){
       if(v("fc-cvf"))  c["CVF"]  = v("fc-cvf")+"%";
       if(v("fc-aus"))  c["Auscultation"] = v("fc-aus");
     } else if(s.includes("ophtalm")){
-      if(v("fc-avod")) c["AV OD"] = v("fc-avod");
-      if(v("fc-avog")) c["AV OG"] = v("fc-avog");
-      if(v("fc-tood")) c["TO OD"] = v("fc-tood")+" mmHg";
-      if(v("fc-toog")) c["TO OG"] = v("fc-toog")+" mmHg";
+      if(v("fc-sph-od"))  c["Sphère OD"]      = v("fc-sph-od");
+      if(v("fc-cyl-od"))  c["Cylindre OD"]    = v("fc-cyl-od");
+      if(v("fc-axe-od"))  c["Axe OD"]         = v("fc-axe-od")+"°";
+      if(v("fc-sph-og"))  c["Sphère OG"]      = v("fc-sph-og");
+      if(v("fc-cyl-og"))  c["Cylindre OG"]    = v("fc-cyl-og");
+      if(v("fc-axe-og"))  c["Axe OG"]         = v("fc-axe-og")+"°";
+      if(v("fc-avsc-od")) c["AV sc OD"]       = v("fc-avsc-od");
+      if(v("fc-avsc-og")) c["AV sc OG"]       = v("fc-avsc-og");
+      if(v("fc-avod"))    c["AV cc OD"]       = v("fc-avod");
+      if(v("fc-avog"))    c["AV cc OG"]       = v("fc-avog");
+      if(v("fc-add"))     c["Addition VP"]    = v("fc-add");
+      if(v("fc-tood"))    c["TO OD"]          = v("fc-tood")+" mmHg";
+      if(v("fc-toog"))    c["TO OG"]          = v("fc-toog")+" mmHg";
+      if(v("fc-port"))    c["Port actuel"]    = v("fc-port");
+      if(v("fc-seg-ant")) c["Segment ant."]   = v("fc-seg-ant");
+      if(v("fc-fdo"))     c["Fond d'œil"]     = v("fc-fdo");
+      if(v("fc-verres"))  c["Verres"]         = v("fc-verres");
+      if(v("fc-trait"))   c["Traitements"]    = v("fc-trait");
     } else if(s.includes("traumato")||s.includes("orthopéd")||s.includes("orthoped")){
       const v=(id)=>{const el=document.getElementById(id);return el?el.value.trim():"";};
       if(v("fc-seg"))      c["Segment"]         = v("fc-seg");
@@ -5975,6 +6067,111 @@ function startRealtimePro(){
 }
 
 // ── IMPRESSION ORDONNANCE ─────────────────────────────────
+function printOrdonnanceLunettes(consId, pid) {
+  const p = DB.patients.find(x => x.id === pid);
+  const c = (DB.consultations[pid]||[]).find(x => x.id === consId);
+  if (!p || !c) return;
+  const dr = DB.users.find(x => x.id === c.dr);
+  const titre = dr?.titre ? dr.titre + " " : "";
+  const ct = c.constantes || {};
+
+  const row = (label, od, og) => `
+    <tr>
+      <td style="padding:8px 12px;font-weight:600;background:#f8fafc;border:1px solid #e2e8f0">${label}</td>
+      <td style="padding:8px 12px;text-align:center;border:1px solid #e2e8f0">${od || "—"}</td>
+      <td style="padding:8px 12px;text-align:center;border:1px solid #e2e8f0">${og || "—"}</td>
+    </tr>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Ordonnance Lunettes</title>
+  <style>
+    @page { margin: 20mm; }
+    * { font-family: Arial, sans-serif; }
+    body { color: #1a1a2e; font-size: 13px; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #1A6EFF; }
+    .dr-info h2 { margin: 0 0 4px; font-size: 18px; color: #1A6EFF; }
+    .dr-info p { margin: 2px 0; font-size: 12px; color: #64748B; }
+    .patient-box { background: #f0f7ff; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+    .patient-box h3 { margin: 0 0 6px; font-size: 14px; }
+    .patient-box p { margin: 2px 0; font-size: 12px; color: #475569; }
+    h3.section { color: #1A6EFF; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 20px 0 10px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #1A6EFF; color: white; padding: 8px 12px; text-align: center; font-size: 12px; }
+    .footer { margin-top: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .validity { font-size: 11px; color: #94a3b8; font-style: italic; }
+    .signature { text-align: center; }
+    .signature-box { width: 150px; height: 60px; border: 1px dashed #94a3b8; border-radius: 6px; margin-top: 8px; }
+    .rec-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+    @media print { button { display: none; } }
+  </style></head><body>
+  <button onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:700">🖨️ Imprimer</button>
+
+  <div class="header">
+    <div class="dr-info">
+      <h2>${titre}${dr?.prenom||""} ${dr?.nom||""}</h2>
+      <p>${dr?.spec||""}</p>
+      <p>${dr?.structure||""}</p>
+      <p>${dr?.adresse||""}</p>
+      <p>${dr?.tel_pro||""}</p>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:22px;font-weight:900;color:#1A6EFF">👓 ORDONNANCE LUNETTES</div>
+      <p style="color:#64748B;font-size:12px;margin-top:8px">Date : ${c.date}</p>
+      <p style="color:#64748B;font-size:12px">Valable 1 an</p>
+    </div>
+  </div>
+
+  <div class="patient-box">
+    <h3>👤 Patient</h3>
+    <p><strong>${p.prenom} ${p.nom}</strong> · Né(e) le ${p.dob} · ${p.age} ans</p>
+  </div>
+
+  <h3 class="section">📋 Correction (Vision de loin — VL)</h3>
+  <table>
+    <thead><tr><th></th><th>Œil droit (OD)</th><th>Œil gauche (OG)</th></tr></thead>
+    <tbody>
+      ${row("Sphère", ct["Sphère OD"], ct["Sphère OG"])}
+      ${row("Cylindre", ct["Cylindre OD"], ct["Cylindre OG"])}
+      ${row("Axe", ct["Axe OD"], ct["Axe OG"])}
+      ${row("Acuité avec correction", ct["AV cc OD"], ct["AV cc OG"])}
+    </tbody>
+  </table>
+
+  ${ct["Addition VP"] ? `
+  <h3 class="section">📋 Addition (Vision de près — VP)</h3>
+  <table>
+    <thead><tr><th></th><th>Œil droit (OD)</th><th>Œil gauche (OG)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px 12px;font-weight:600;background:#f8fafc;border:1px solid #e2e8f0">Addition</td>
+        <td style="padding:8px 12px;text-align:center;border:1px solid #e2e8f0">${ct["Addition VP"]}</td>
+        <td style="padding:8px 12px;text-align:center;border:1px solid #e2e8f0">${ct["Addition VP"]}</td>
+      </tr>
+    </tbody>
+  </table>` : ""}
+
+  <div class="rec-box">
+    <strong>Recommandations :</strong><br/>
+    ${ct["Verres"] ? `Type de verres : <strong>${ct["Verres"]}</strong><br/>` : ""}
+    ${ct["Traitements"] ? `Traitements : <strong>${ct["Traitements"]}</strong><br/>` : ""}
+    ${c.cr ? `<br/><em>${c.cr}</em>` : ""}
+  </div>
+
+  <div class="footer">
+    <div class="validity">Ordonnance valable 1 an à compter du ${c.date}</div>
+    <div class="signature">
+      <div style="font-size:12px;color:#64748B">Signature et cachet</div>
+      <div class="signature-box"></div>
+      <div style="margin-top:8px;font-size:12px;font-weight:700">${titre}${dr?.nom||""}</div>
+    </div>
+  </div>
+  </body></html>`;
+
+  const w = window.open("", "_blank");
+  w.document.write(html);
+  w.document.close();
+}
+
 function printOrdonnance(pid, ordId){
   const p = DB.patients.find(x=>x.id===pid);
   if(!p) return;
