@@ -2097,6 +2097,7 @@ function rDossier(){
       ${(["medecin","specialiste","admin"].includes(u.role)&&!p.userId)?`<button class="btn bp bsm" onclick="activerAccesMobile('${p.id}')">📱 Activer accès mobile</button>`:""}
       ${(["medecin","specialiste","admin"].includes(u.role)&&p.userId)?`<button class="btn bs bsm" onclick="printFicheAcces('${p.userId}')">🖨️ Fiche accès</button>`:""}
       ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="showEditPatient('${p.id}')">✏️ Modifier</button>`:""}
+      ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="printBilanComplet('${p.id}')">🖨️ Bilan complet</button>`:""}
     </div>
     <div id="dossier-content"></div>`;
   renderDossierTab();
@@ -6065,6 +6066,143 @@ function _doActiverAccesMobile(pid) {
   setTimeout(()=>{ printFicheAccesFromData(pid, pr, nm, newLogin, newPin, p.dob, p.groupe); }, 300);
 }
 
+
+function printBilanComplet(pid) {
+  const p = DB.patients.find(x=>x.id===pid);
+  if (!p) return;
+  const ref = DB.users.find(x=>x.id===p.medecin_ref);
+  const titrRef = ref ? (ref.titre?ref.titre+" ":"") + ref.prenom + " " + ref.nom : "—";
+  const cons = (DB.consultations[pid]||[]).slice(0,3);
+  const labos = (DB.labos[pid]||[]).slice(0,2);
+  const imgs = (DB.imagerie[pid]||[]).slice(0,2);
+  const rxActifs = (DB.rx[pid]||[]).filter(r=>r.s==="active");
+  const rdvs = (DB.rdv||[]).filter(r=>r.patientId===pid).sort((a,b)=>{
+    const pd=d=>{if(!d)return 0;const p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;};
+    return pd(a.date)-pd(b.date);
+  });
+  const nextRdv = rdvs.find(r=>{ const p=r.date?r.date.split("/"):[];return p.length===3&&new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]))>=new Date(); });
+
+  if(sessionTimer) clearTimeout(sessionTimer);
+  window.addEventListener("focus", resetSessionTimer, {once:true});
+
+  const win = window.open("","_blank","width=700,height=900");
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Bilan complet — ${p.prenom} ${p.nom}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+body{background:#fff;padding:18mm;color:#0F172A;font-size:12px;line-height:1.5}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:2.5px solid #1A6EFF;margin-bottom:16px}
+.logo-title{font-size:20px;font-weight:900;color:#0F172A}.logo-title span{color:#1A6EFF}
+.logo-sub{font-size:9px;color:#64748B;margin-top:2px}
+.doc-right{text-align:right}
+.doc-title{font-size:13px;font-weight:800;color:#1A6EFF}
+.doc-meta{font-size:9px;color:#64748B;margin-top:3px}
+.patient-box{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pat-name{font-size:16px;font-weight:900;color:#0F172A;grid-column:1/-1;margin-bottom:4px}
+.pat-info{font-size:11px;color:#475569}
+.pat-lbl{font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
+.section{margin-bottom:14px}
+.sec-title{font-size:10px;font-weight:700;color:#1A6EFF;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #E2E8F0;padding-bottom:4px;margin-bottom:8px}
+.tag{display:inline-block;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;margin:2px}
+.tag-red{background:#FEE2E2;color:#DC2626}
+.tag-orange{background:#FEF3C7;color:#D97706}
+.rx-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F1F5F9;font-size:11px}
+.rx-med{font-weight:700;color:#0F172A}
+.rx-dos{color:#64748B}
+.rx-pos{color:#475569;font-size:10px}
+.cons-card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px;margin-bottom:8px}
+.cons-header{display:flex;justify-content:space-between;margin-bottom:4px}
+.cons-date{font-size:10px;font-weight:700;color:#1A6EFF}
+.cons-dr{font-size:10px;color:#64748B}
+.cons-motif{font-size:11px;font-weight:700;color:#0F172A;margin-bottom:4px}
+.cons-cr{font-size:10px;color:#475569;line-height:1.5}
+.labo-card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px;margin-bottom:8px}
+.labo-header{display:flex;justify-content:space-between;margin-bottom:6px}
+.labo-date{font-size:10px;font-weight:700;color:#1A6EFF}
+.res-row{display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #F1F5F9}
+.res-bad{color:#DC2626;font-weight:700}
+.res-warn{color:#D97706;font-weight:700}
+.res-ok{color:#16A34A}
+.img-card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px;margin-bottom:8px}
+.rdv-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px}
+.footer{margin-top:20px;padding-top:10px;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between}
+.footer-note{font-size:8px;color:#94A3B8;font-style:italic}
+@media print{body{padding:12mm}@page{margin:0;size:A4}button{display:none}}
+</style></head><body>
+<button onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimer / PDF</button>
+
+<div class="header">
+  <div><div class="logo-title">Medi<span>Report</span></div><div class="logo-sub">Systeme de gestion medicale</div></div>
+  <div class="doc-right"><div class="doc-title">📋 BILAN COMPLET PATIENT</div><div class="doc-meta">Imprime le ${today()} · Confidentiel</div></div>
+</div>
+
+<div class="patient-box">
+  <div class="pat-name">${p.prenom} ${p.nom}</div>
+  <div><div class="pat-lbl">Date de naissance</div><div class="pat-info">${p.dob||"—"} · ${p.age} ans</div></div>
+  <div><div class="pat-lbl">Groupe sanguin</div><div class="pat-info">${p.groupe||"—"}</div></div>
+  <div><div class="pat-lbl">Ville</div><div class="pat-info">${p.ville||"—"}</div></div>
+  <div><div class="pat-lbl">Medecin referent</div><div class="pat-info">${titrRef}</div></div>
+</div>
+
+<div class="section">
+  <div class="sec-title">Pathologies & Antécédents</div>
+  <div style="margin-bottom:6px">${(p.pathologies||[]).map(x=>`<span class="tag">${x}</span>`).join("")||"<span style='color:#94A3B8;font-size:11px'>Aucune pathologie renseignée</span>"}</div>
+  ${(p.allergies||[]).filter(Boolean).length?`<div style="margin-bottom:4px"><strong style="font-size:10px;color:#DC2626">Allergies :</strong> ${p.allergies.filter(Boolean).map(x=>`<span class="tag tag-red">⚠ ${x}</span>`).join("")}</div>`:""}
+  ${(p.antecedents||[]).filter(Boolean).length?`<div><strong style="font-size:10px;color:#64748B">Antécédents :</strong> ${p.antecedents.filter(Boolean).map(x=>`<span class="tag tag-orange">${x}</span>`).join("")}</div>`:""}
+</div>
+
+<div class="section">
+  <div class="sec-title">Traitements en cours (${rxActifs.length})</div>
+  ${rxActifs.length ? rxActifs.map(r=>`<div class="rx-row"><div><div class="rx-med">${r.med} <span class="rx-dos">${r.dos}</span></div><div class="rx-pos">${r.pos}</div></div><div style="font-size:10px;color:#64748B;text-align:right">${r.ind||""}</div></div>`).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucun traitement actif</div>"}
+</div>
+
+<div class="section">
+  <div class="sec-title">Dernières consultations</div>
+  ${cons.length ? cons.map(c=>{
+    const dr = DB.users.find(x=>x.id===c.dr);
+    const drNom = dr?(dr.titre?dr.titre+" ":"")+dr.prenom+" "+dr.nom:"—";
+    return `<div class="cons-card">
+      <div class="cons-header"><span class="cons-date">${c.date}</span><span class="cons-dr">${drNom} · ${c.spec||""}</span></div>
+      <div class="cons-motif">${c.motif||""}</div>
+      <div class="cons-cr">${c.cr||""}</div>
+    </div>`;
+  }).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucune consultation</div>"}
+</div>
+
+<div class="section">
+  <div class="sec-title">Derniers résultats labo</div>
+  ${labos.length ? labos.map(l=>`<div class="labo-card">
+    <div class="labo-header"><span class="labo-date">${l.date}</span><span style="font-size:10px;color:#64748B">${l.labo||l.ref||""}</span></div>
+    ${(l.res||l.resultats||[]).map(r=>`<div class="res-row"><span>${r.p}</span><span class="${r.s==="bad"?"res-bad":r.s==="warn"?"res-warn":"res-ok"}">${r.v} ${r.u} <span style="font-size:9px;color:#94A3B8">(${r.n})</span></span></div>`).join("")}
+  </div>`).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucun résultat labo</div>"}
+</div>
+
+<div class="section">
+  <div class="sec-title">Imagerie</div>
+  ${imgs.length ? imgs.map(i=>`<div class="img-card">
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;font-weight:700;color:#1A6EFF">${i.date}</span><span style="font-size:10px;color:#64748B">${i.centre||""}</span></div>
+    <div style="font-size:11px;font-weight:700;margin-bottom:3px">${i.type||""}</div>
+    <div style="font-size:10px;color:#475569">${i.conclusion||i.cr||""}</div>
+  </div>`).join("") : "<div style='color:#94A3B8;font-size:11px'>Aucune imagerie</div>"}
+</div>
+
+${nextRdv ? `<div class="section">
+  <div class="sec-title">Prochain rendez-vous</div>
+  <div class="rdv-box">
+    <div style="font-size:12px;font-weight:700;color:#0F172A">📅 ${nextRdv.day} ${nextRdv.mo} à ${nextRdv.h}</div>
+    <div style="font-size:11px;color:#475569;margin-top:3px">${nextRdv.spec||""} · ${nextRdv.lieu||""}</div>
+    <div style="font-size:10px;color:#64748B;margin-top:2px">${nextRdv.motif||""}</div>
+  </div>
+</div>` : ""}
+
+<div class="footer">
+  <div class="footer-note">MediReport · Document confidentiel · Usage medical uniquement · ${today()}</div>
+  <div class="footer-note">Dossier N° ${pid}</div>
+</div>
+<script>window.onload=()=>setTimeout(()=>window.print(),500);<\/script>
+</body></html>`);
+  win.document.close();
+}
 
 function printFicheAcces(userId){
   const u = DB.users.find(x=>x.id===userId);

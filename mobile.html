@@ -157,7 +157,6 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 </div>
 
 <script>
-var DB_VER = "v25";
 var DB = null, PAT = null, USR = null, pin = "";
 
 function p(v) {
@@ -180,14 +179,13 @@ function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  // Vérifier cache
+  // Vérifier cache localStorage (fallback si Supabase indisponible)
   try {
     var raw = localStorage.getItem("medirecord_db");
-    var ver = localStorage.getItem("medirecord_db_version");
-    if (raw && ver === DB_VER) DB = JSON.parse(raw);
+    if (raw) DB = JSON.parse(raw);
   } catch(e) { DB = null; }
 
-  // Si cache vide, charger TOUTES les données depuis Supabase
+  // Si cache vide ou version obsolète, charger TOUTES les données depuis Supabase
   if (!DB || !DB.users || !DB.users.length) {
     err.textContent = "⏳ Connexion en cours...";
     var loaded = 0; var total = 4;
@@ -202,7 +200,7 @@ function login() {
         return;
       }
       DB = freshDB;
-      try { localStorage.setItem("medirecord_db", JSON.stringify(DB)); localStorage.setItem("medirecord_db_version", DB_VER); } catch(e) {}
+      try { localStorage.setItem("medirecord_db", JSON.stringify(DB)); } catch(e) {}
       err.textContent = "";
       login();
     }
@@ -260,6 +258,8 @@ function login() {
   function updateBar(){ loaded++; var pct=(loaded/total*100); document.getElementById("load-bar").style.width=pct+"%"; if(loaded>=total) launchApp(); }
 
   function launchApp(){
+    // Sauvegarder le dossier complet dans le cache
+    try { localStorage.setItem("medirecord_db", JSON.stringify(DB)); } catch(e) {}
     var ls = document.getElementById("loading-screen");
     if(ls) ls.remove();
     document.getElementById("app").style.display = "flex";
@@ -554,6 +554,8 @@ function tabSyn() {
     h+='</div>';
   }
   h+='<div style="text-align:center;font-size:11px;color:#94A3B8;padding:10px 0">🔒 Dossier confidentiel — CNDP Maroc</div>';
+  // Bouton bilan complet
+  h += '<div style="padding:16px 0 8px"><button onclick="printBilanMobile()" style="background:#1A6EFF;color:#fff;border:none;border-radius:12px;padding:13px 0;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;width:100%">🖨️ Imprimer mon bilan complet</button></div>';
   return h;
 }
 
@@ -836,8 +838,7 @@ function toggleImg(el){
 function buildDB() {
   // Essayer le cache localStorage
   var raw = localStorage.getItem("medirecord_db");
-  var ver = localStorage.getItem("medirecord_db_version");
-  if (raw && ver === DB_VER) {
+  if (raw) {
     try { return JSON.parse(raw); } catch(e) {}
   }
   // Aucun cache — retourner DB vide (login screen reste visible)
@@ -872,4 +873,98 @@ function refreshPatientData() {
 
 
 
+
+function printBilanMobile() {
+  var p = PAT;
+  if (!p) return;
+  var cons = (DB.consultations[p.id]||[]).slice(0,3);
+  var labos = (DB.labos[p.id]||[]).slice(0,2);
+  var imgs = (DB.imagerie[p.id]||[]).slice(0,2);
+  var rxActifs = (DB.rx[p.id]||[]).filter(function(r){return r.s==="active";});
+  var rdvs = (DB.rdv||[]).filter(function(r){return r.patientId===p.id;});
+  var today = new Date(); 
+  var todayStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+  var nextRdv = rdvs.find(function(r){
+    if(!r.day||!r.mo||!r.h) return false;
+    var mois={"Janv":0,"Fevr":1,"Mars":2,"Avr":3,"Mai":4,"Juin":5,"Juil":6,"Aout":7,"Août":7,"Sept":8,"Oct":9,"Nov":10,"Dec":11,"Déc":11};
+    var m=mois[r.mo]; if(m===undefined) return false;
+    return new Date(new Date().getFullYear(),m,parseInt(r.day))>=new Date();
+  });
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>Mon bilan complet</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}body{padding:16px;color:#0F172A;font-size:12px}'
+    +'.header{border-bottom:2px solid #1A6EFF;padding-bottom:10px;margin-bottom:14px}'
+    +'.logo{font-size:18px;font-weight:900;color:#0F172A}.logo span{color:#1A6EFF}'
+    +'.doc-title{font-size:12px;font-weight:800;color:#1A6EFF;margin-top:2px}'
+    +'.pat-box{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;margin-bottom:12px}'
+    +'.pat-name{font-size:15px;font-weight:900;margin-bottom:6px}'
+    +'.pat-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}'
+    +'.pat-lbl{font-size:8px;color:#94A3B8;text-transform:uppercase}'
+    +'.pat-val{font-size:11px;font-weight:700}'
+    +'.sec-title{font-size:9px;font-weight:700;color:#1A6EFF;text-transform:uppercase;border-bottom:1px solid #E2E8F0;padding-bottom:3px;margin:12px 0 6px}'
+    +'.tag{display:inline-block;background:#EFF6FF;color:#1D4ED8;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:600;margin:2px}'
+    +'.tag-red{background:#FEE2E2;color:#DC2626}'
+    +'.tag-or{background:#FEF3C7;color:#D97706}'
+    +'.rx-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:11px}'
+    +'.card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:8px;margin-bottom:6px}'
+    +'.card-date{font-size:9px;font-weight:700;color:#1A6EFF}'
+    +'.card-title{font-size:11px;font-weight:700;margin:2px 0}'
+    +'.card-body{font-size:10px;color:#475569}'
+    +'.res-bad{color:#DC2626;font-weight:700}.res-warn{color:#D97706;font-weight:700}.res-ok{color:#16A34A}'
+    +'.rdv-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:8px}'
+    +'.footer{margin-top:16px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:8px;color:#94A3B8;font-style:italic}'
+    +'button.print-btn{background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-bottom:14px}'
+    +'@media print{button{display:none}@page{margin:10mm;size:A4}}</style></head><body>'
+    +'<button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>'
+    +'<div class="header"><div class="logo">Medi<span>Report</span></div><div class="doc-title">BILAN COMPLET PATIENT · '+todayStr+'</div></div>'
+    +'<div class="pat-box"><div class="pat-name">'+p.prenom+' '+p.nom+'</div>'
+    +'<div class="pat-grid">'
+    +'<div><div class="pat-lbl">Date de naissance</div><div class="pat-val">'+(p.dob||"—")+'</div></div>'
+    +'<div><div class="pat-lbl">Groupe sanguin</div><div class="pat-val">'+(p.groupe||"—")+'</div></div>'
+    +'<div><div class="pat-lbl">Age</div><div class="pat-val">'+(p.age||"—")+' ans</div></div>'
+    +'<div><div class="pat-lbl">Ville</div><div class="pat-val">'+(p.ville||"—")+'</div></div>'
+    +'</div></div>';
+
+  // Pathologies
+  html += '<div class="sec-title">Pathologies & Antécédents</div>';
+  html += (p.pathologies||[]).map(function(x){return '<span class="tag">'+x+'</span>';}).join("")||'<span style="color:#94A3B8;font-size:10px">Aucune</span>';
+  if((p.allergies||[]).filter(Boolean).length) html += '<br/><strong style="font-size:9px;color:#DC2626">Allergies :</strong> '+(p.allergies||[]).filter(Boolean).map(function(x){return '<span class="tag tag-red">⚠ '+x+'</span>';}).join("");
+  if((p.antecedents||[]).filter(Boolean).length) html += '<br/><strong style="font-size:9px;color:#D97706">Antécédents :</strong> '+(p.antecedents||[]).filter(Boolean).map(function(x){return '<span class="tag tag-or">'+x+'</span>';}).join("");
+
+  // Traitements
+  html += '<div class="sec-title">Traitements en cours ('+rxActifs.length+')</div>';
+  html += rxActifs.length ? rxActifs.map(function(r){return '<div class="rx-row"><div><strong>'+r.med+'</strong> <span style="color:#64748B">'+r.dos+'</span><br/><span style="color:#475569;font-size:10px">'+r.pos+'</span></div><span style="font-size:10px;color:#64748B">'+(r.ind||"")+'</span></div>';}).join("") : '<div style="color:#94A3B8;font-size:10px">Aucun traitement actif</div>';
+
+  // Consultations
+  html += '<div class="sec-title">Dernières consultations</div>';
+  html += cons.length ? cons.map(function(c){return '<div class="card"><div class="card-date">'+c.date+' · '+(c.spec||"")+'</div><div class="card-title">'+(c.motif||"")+'</div><div class="card-body">'+(c.cr||"")+'</div></div>';}).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune consultation</div>';
+
+  // Labos
+  html += '<div class="sec-title">Derniers résultats labo</div>';
+  html += labos.length ? labos.map(function(l){
+    var res = l.res||l.resultats||[];
+    return '<div class="card"><div class="card-date">'+l.date+' · '+(l.labo||"")+'</div>'
+      +res.map(function(r){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 0;border-bottom:1px solid #F1F5F9"><span>'+r.p+'</span><span class="'+(r.s==="bad"?"res-bad":r.s==="warn"?"res-warn":"res-ok")+'">'+r.v+' '+r.u+' <span style="color:#94A3B8">('+r.n+')</span></span></div>';}).join("")
+      +'</div>';
+  }).join("") : '<div style="color:#94A3B8;font-size:10px">Aucun résultat labo</div>';
+
+  // Imagerie
+  html += '<div class="sec-title">Imagerie</div>';
+  html += imgs.length ? imgs.map(function(i){return '<div class="card"><div class="card-date">'+i.date+' · '+(i.centre||"")+'</div><div class="card-title">'+(i.type||"")+'</div><div class="card-body">'+(i.conclusion||i.cr||"")+'</div></div>';}).join("") : '<div style="color:#94A3B8;font-size:10px">Aucune imagerie</div>';
+
+  // Prochain RDV
+  if(nextRdv){
+    html += '<div class="sec-title">Prochain rendez-vous</div>'
+      +'<div class="rdv-box"><div style="font-size:12px;font-weight:700">📅 '+nextRdv.day+' '+nextRdv.mo+' à '+nextRdv.h+'</div>'
+      +'<div style="font-size:10px;color:#475569;margin-top:2px">'+(nextRdv.spec||"")+' · '+(nextRdv.lieu||"")+'</div>'
+      +'<div style="font-size:10px;color:#64748B">'+(nextRdv.motif||"")+'</div></div>';
+  }
+
+  html += '<div class="footer">MediReport · Document confidentiel · Usage médical uniquement · '+todayStr+'</div>';
+  html += '</body></html>';
+
+  var w = window.open("","_blank");
+  if(w){ w.document.write(html); w.document.close(); }
+}
 </script>
