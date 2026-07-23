@@ -3270,37 +3270,30 @@ function showAddConsult(pid){
 
     if(s.includes("ophtalm")||s.includes("oeil")||s.includes("œil")){
       return `
-        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👁️ Réfraction</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:700;color:var(--g500);padding-top:22px"></div>
-          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Sphère</div>
-          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Cylindre</div>
-          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Axe (°)</div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue)">OD</div>
-          <div class="fg" style="margin:0"><input id="fc-sph-od" placeholder="Ex: +1.25"/></div>
-          <div class="fg" style="margin:0"><input id="fc-cyl-od" placeholder="Ex: -0.50"/></div>
-          <div class="fg" style="margin:0"><input id="fc-axe-od" placeholder="Ex: 90"/></div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue)">OG</div>
-          <div class="fg" style="margin:0"><input id="fc-sph-og" placeholder="Ex: +1.50"/></div>
-          <div class="fg" style="margin:0"><input id="fc-cyl-og" placeholder="Ex: -0.75"/></div>
-          <div class="fg" style="margin:0"><input id="fc-axe-og" placeholder="Ex: 85"/></div>
-        </div>
-        <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👁️ Acuité visuelle</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-          <div></div>
-          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Sans correction</div>
-          <div style="font-size:11px;font-weight:700;color:var(--g600);text-align:center">Avec correction</div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue)">OD</div>
-          <div class="fg" style="margin:0"><input id="fc-avsc-od" placeholder="Ex: 4/10"/></div>
-          <div class="fg" style="margin:0"><input id="fc-avod" placeholder="Ex: 7/10"/></div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue)">OG</div>
-          <div class="fg" style="margin:0"><input id="fc-avsc-og" placeholder="Ex: 3/10"/></div>
-          <div class="fg" style="margin:0"><input id="fc-avog" placeholder="Ex: 6/10"/></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <!-- OG -->
+          <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px">
+            <div style="font-size:12px;font-weight:800;color:#16A34A;margin-bottom:10px;text-align:center">👁 OEIL GAUCHE (OG)</div>
+            <div class="fg" style="margin:0 0 8px"><label>Sphère</label><input id="fc-sph-og" placeholder="Ex: +1.50"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>Cylindre</label><input id="fc-cyl-og" placeholder="Ex: -0.75"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>Axe (°)</label><input id="fc-axe-og" placeholder="Ex: 85"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>AV sans correction</label><input id="fc-avsc-og" placeholder="Ex: 3/10"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>AV avec correction</label><input id="fc-avog" placeholder="Ex: 6/10"/></div>
+            <div class="fg" style="margin:0"><label>Tension oculaire (mmHg)</label><input id="fc-toog" placeholder="Ex: 15"/></div>
+          </div>
+          <!-- OD -->
+          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px">
+            <div style="font-size:12px;font-weight:800;color:#1A6EFF;margin-bottom:10px;text-align:center">👁 OEIL DROIT (OD)</div>
+            <div class="fg" style="margin:0 0 8px"><label>Sphère</label><input id="fc-sph-od" placeholder="Ex: +1.25"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>Cylindre</label><input id="fc-cyl-od" placeholder="Ex: -0.50"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>Axe (°)</label><input id="fc-axe-od" placeholder="Ex: 90"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>AV sans correction</label><input id="fc-avsc-od" placeholder="Ex: 4/10"/></div>
+            <div class="fg" style="margin:0 0 8px"><label>AV avec correction</label><input id="fc-avod" placeholder="Ex: 7/10"/></div>
+            <div class="fg" style="margin:0"><label>Tension oculaire (mmHg)</label><input id="fc-tood" placeholder="Ex: 16"/></div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
           <div class="fg" style="margin:0"><label>Addition VP (presbytie)</label><input id="fc-add" placeholder="Ex: +2.50"/></div>
-          <div class="fg" style="margin:0"><label>Tension OD (mmHg)</label><input id="fc-tood" placeholder="Ex: 16"/></div>
-          <div class="fg" style="margin:0"><label>Tension OG (mmHg)</label><input id="fc-toog" placeholder="Ex: 15"/></div>
           <div class="fg" style="margin:0"><label>Port de correction actuel</label>
             <select id="fc-port"><option value="">—</option><option>Aucun</option><option>Lunettes VL</option><option>Lunettes VP</option><option>Lunettes progressives</option><option>Lentilles</option></select>
           </div>

@@ -581,13 +581,41 @@ function tabCon() {
     h+='<div id="'+bid+'" style="display:none;border-top:1px solid #F1F5F9;padding:14px">';
     if(c.cr) h+='<div style="font-size:13px;color:#334155;line-height:1.6;margin-bottom:10px">'+(c.cr||"").slice(0,500)+'</div>';
     if(c.constantes&&Object.keys(c.constantes).length){
-      h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">';
-      Object.entries(c.constantes).forEach(function(e){
-        h+='<span style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:3px 8px;font-size:11px"><span style="color:#94A3B8">'+e[0]+'</span> <strong>'+e[1]+'</strong></span>';
-      });
-      h+='</div>';
-      // Bouton ordonnance lunettes si consultation ophtalmologique
-
+      var ct=c.constantes;
+      var isOph=(c.spec||"").toLowerCase().indexOf("ophtalm")>=0;
+      if(isOph){
+        // Affichage groupé OD / OG pour ophtalmo
+        h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
+        // OG à gauche
+        h+='<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px">';
+        h+='<div style="font-size:11px;font-weight:800;color:#16A34A;margin-bottom:6px;text-align:center">👁 OG</div>';
+        var ogFields=[["Sphère","Sphère OG"],["Cylindre","Cylindre OG"],["Axe","Axe OG"],["AV sc","AV sc OG"],["AV cc","AV cc OG"],["Tension","TO OG"]];
+        ogFields.forEach(function(f){
+          if(ct[f[1]]) h+='<div style="font-size:11px;margin-bottom:3px"><span style="color:#94A3B8">'+f[0]+'</span> <strong>'+ct[f[1]]+'</strong></div>';
+        });
+        h+='</div>';
+        // OD à droite
+        h+='<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px">';
+        h+='<div style="font-size:11px;font-weight:800;color:#1A6EFF;margin-bottom:6px;text-align:center">👁 OD</div>';
+        var odFields=[["Sphère","Sphère OD"],["Cylindre","Cylindre OD"],["Axe","Axe OD"],["AV sc","AV sc OD"],["AV cc","AV cc OD"],["Tension","TO OD"]];
+        odFields.forEach(function(f){
+          if(ct[f[1]]) h+='<div style="font-size:11px;margin-bottom:3px"><span style="color:#94A3B8">'+f[0]+'</span> <strong>'+ct[f[1]]+'</strong></div>';
+        });
+        h+='</div>';
+        h+='</div>';
+        // Champs communs
+        var commonFields=[["Addition VP","Addition VP"],["Port actuel","Port actuel"],["Segment ant.","Segment ant."],["Fond d'oeil","Fond d'oeil"],["Verres","Verres"],["Traitements","Traitements"]];
+        var commonHtml="";
+        commonFields.forEach(function(f){ if(ct[f[1]]) commonHtml+='<div style="font-size:11px;margin-bottom:3px"><span style="color:#94A3B8">'+f[0]+'</span> <strong>'+ct[f[1]]+'</strong></div>'; });
+        if(commonHtml) h+='<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:8px;margin-bottom:10px">'+commonHtml+'</div>';
+      } else {
+        // Affichage badges pour les autres spécialités
+        h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">';
+        Object.entries(ct).forEach(function(e){
+          h+='<span style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:3px 8px;font-size:11px"><span style="color:#94A3B8">'+e[0]+'</span> <strong>'+e[1]+'</strong></span>';
+        });
+        h+='</div>';
+      }
     }
     h+='</div></div>';
   });
