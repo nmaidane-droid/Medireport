@@ -973,7 +973,8 @@ function printBilanMobile() {
   html += '</body></html>';
 
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
-  var w = window.open("", "_blank");
-  if (w) { w.document.write(html); w.document.close(); }
+  document.open();
+  document.write(html);
+  document.close();
 }
 </script>
