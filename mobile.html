@@ -180,12 +180,30 @@ function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
+  // Vérifier cache
   try {
     var raw = localStorage.getItem("medirecord_db");
     var ver = localStorage.getItem("medirecord_db_version");
     if (raw && ver === DB_VER) DB = JSON.parse(raw);
   } catch(e) { DB = null; }
-  if (!DB) DB = buildDB();
+
+  // Si cache vide, charger users depuis Supabase d'abord
+  if (!DB || !DB.users || !DB.users.length) {
+    err.textContent = "⏳ Connexion en cours...";
+    supaGet("users?select=*", function(rows) {
+      if (!rows || !rows.length) {
+        err.textContent = "Service indisponible. Réessayez plus tard.";
+        pin = ""; document.querySelectorAll(".dot").forEach(function(d){d.classList.remove("on");});
+        return;
+      }
+      if (!DB) DB = {users:[],patients:[],consultations:{},labos:{},rx:{},rdv:[],imagerie:{},access:[],demandes_labo:[],demandes_avis:[],logs:[]};
+      DB.users = rows.map(function(u){ return Object.assign({},u,{patientId:u.patient_id}); });
+      // Relancer le login avec les users chargés
+      err.textContent = "";
+      login();
+    });
+    return;
+  }
 
   var user = null;
   for (var i=0; i<DB.users.length; i++) {
