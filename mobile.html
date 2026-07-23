@@ -255,7 +255,7 @@ function login() {
   // ── Charger toutes les données depuis Supabase en parallèle ──
   var pid = pat.id;
   var loaded = 0;
-  var total = 5;
+  var total = 6;
 
   function updateBar(){ loaded++; var pct=(loaded/total*100); document.getElementById("load-bar").style.width=pct+"%"; if(loaded>=total) launchApp(); }
 
@@ -288,6 +288,11 @@ function login() {
   });
 
   // Consultations
+  supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.imagerie=DB.imagerie||{}; DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{patientId:i.patient_id,cr:i.conclusion,res:i.resultat,rc:i.resultat==="Normal"?"g":"a"}); }); }
+    updateBar();
+  });
+
   supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
     if(rows){ DB.consultations=DB.consultations||{}; DB.consultations[pid]=rows; }
     updateBar();
