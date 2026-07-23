@@ -6022,8 +6022,25 @@ function activerAccesMobile(pid) {
   if(!p){ alert("Patient introuvable"); return; }
   if(p.userId){ alert("L'accès mobile est déjà activé pour ce patient."); return; }
 
-  if(!confirm("Activer l'accès mobile pour "+p.prenom+" "+p.nom+" ?")) return;
+  const ov = modal(`<div class="mb"><div class="mh"><span class="mt2">📱 Activation accès mobile</span></div><div class="mbod">
+    <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:800;color:#92400E;margin-bottom:6px">⚠️ Cette activation vous sera facturée</div>
+      <div style="font-size:13px;color:#78350F">Vous êtes sur le point d'activer l'accès mobile pour <strong>${p.prenom} ${p.nom}</strong>. Cette opération sera enregistrée et facturée par l'administrateur.</div>
+    </div>
+    <div style="font-size:13px;color:var(--g600)">Confirmez-vous l'activation ?</div>
+  </div><div class="mf">
+    <button class="btn bs" onclick="this.closest('.mov').remove()">↩️ Annuler</button>
+    <button class="btn bp" id="confirm-activer">✅ Confirmer et activer</button>
+  </div></div>`);
 
+  ov.querySelector("#confirm-activer").onclick = () => {
+    ov.remove();
+    _doActiverAccesMobile(pid);
+  };
+}
+
+function _doActiverAccesMobile(pid) {
+  const p = DB.patients.find(x=>x.id===pid);
   const pr = p.prenom, nm = p.nom;
   const newPin = generatePIN();
   const newLogin = (pr[0]+"."+nm).toLowerCase().replace(/[^a-z0-9.]/g,"");
@@ -6047,6 +6064,7 @@ function activerAccesMobile(pid) {
   renderDossierTab();
   setTimeout(()=>{ printFicheAccesFromData(pid, pr, nm, newLogin, newPin, p.dob, p.groupe); }, 300);
 }
+
 
 function printFicheAcces(userId){
   const u = DB.users.find(x=>x.id===userId);
