@@ -6227,65 +6227,96 @@ function generateQRToCanvas(url, canvas){
 function printFicheAccesFromData(pid, prenom, nom, login, pin, dob, groupe){
   const url = "https://medireport-kappa.vercel.app/mobile.html";
   const qrData = (()=>{ const c=document.createElement("canvas"); generateQRToCanvas(url,c); return c.toDataURL("image/png"); })();
-  // Suspendre le timer de session pendant l'impression
   if(sessionTimer) clearTimeout(sessionTimer);
   window.addEventListener("focus", resetSessionTimer, {once:true});
-
-  const win=window.open("","_blank","width=500,height=700");
+  const dateRemise = today();
+  const win=window.open("","_blank","width=620,height=800");
   win.document.write(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"/>
 <title>Fiche accès — ${prenom} ${nom}</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;padding:30px;color:#0F172A}
-.header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #E2E8F0}
-.logo-box{width:42px;height:42px;border-radius:10px;border:2px solid #e2e8f0;padding:3px;overflow:hidden;flex-shrink:0}
-.logo-title{font-size:18px;font-weight:900;color:#0F172A}.logo-title span{color:#1A6EFF}
-.logo-sub{font-size:11px;color:#64748B}
-h2{font-size:15px;font-weight:800;color:#0F172A;margin-bottom:16px;background:#EAF1FF;padding:10px 14px;border-radius:8px;border-left:4px solid #1A6EFF}
-.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
-.info-box{background:#F8FAFC;border-radius:8px;padding:10px 14px;border:1px solid #E2E8F0}
-.info-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+body{background:#fff;padding:20mm;color:#0F172A;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:2.5px solid #1A6EFF;margin-bottom:20px}
+.logo-title{font-size:22px;font-weight:900;color:#0F172A}.logo-title span{color:#1A6EFF}
+.logo-sub{font-size:9px;color:#64748B;margin-top:2px}
+.doc-title{text-align:right;font-size:13px;font-weight:800;color:#1A6EFF}
+.doc-meta{font-size:9px;color:#64748B;margin-top:3px;text-align:right}
+.section-label{font-size:9px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:18px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;background:#F8FAFC}
+.info-cell{padding:10px 14px;border-right:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0}
+.info-cell:nth-child(2n){border-right:none}
+.info-cell:nth-child(3),.info-cell:nth-child(4){border-bottom:none}
+.info-lbl{font-size:8px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .info-val{font-size:14px;font-weight:700;color:#0F172A}
-.cred-box{background:#0F172A;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:20px;align-items:center}
-.cred-left{flex:1}
-.cred-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.cred-val{font-size:16px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:2px}
-.pin-val{font-size:24px;font-weight:900;color:#1A6EFF;font-family:monospace;letter-spacing:6px}
-.qr-wrap{text-align:center}
-.qr-wrap img{width:130px;height:130px;border:3px solid rgba(255,255,255,.2);border-radius:10px;padding:4px;background:#fff}
-.qr-url{font-size:9px;color:#94A3B8;margin-top:4px}
-.steps{margin-bottom:20px}
-.step{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px;color:#334155}
-.step-num{width:18px;height:18px;border-radius:50%;background:#1A6EFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
-.warning{background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400E;margin-bottom:20px}
-.footer{font-size:10px;color:#94A3B8;text-align:center;border-top:1px solid #F1F5F9;padding-top:14px}
-@media print{body{padding:20px}@page{margin:1cm;size:A4}}
+.cred-box{background:#0F172A;border-radius:8px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;margin-top:6px}
+.cred-cell{padding:14px 18px;border-right:1px solid #334155;text-align:center}
+.cred-cell:last-child{border-right:none}
+.cred-lbl{font-size:8px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.cred-login{font-size:17px;font-weight:900;color:#FFFFFF;letter-spacing:1px}
+.cred-pin{font-size:26px;font-weight:900;color:#FFFFFF;letter-spacing:4px}
+.warning{font-size:8px;font-weight:700;color:#DC2626;margin-top:6px}
+.access-box{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:14px;margin-top:6px}
+.access-title{font-size:12px;font-weight:800;color:#0F172A;margin-bottom:6px}
+.access-url{font-size:9px;color:#64748B;margin-bottom:4px}
+.access-link{font-size:10px;font-weight:700;color:#1A6EFF}
+.access-note{font-size:9px;color:#64748B;margin-top:6px}
+.qr-img{width:90px;height:90px;border:1px solid #E2E8F0;border-radius:4px;padding:3px;background:#fff}
+.footer{display:flex;justify-content:space-between;margin-top:24px;padding-top:10px;border-top:1px solid #E2E8F0}
+.footer-note{font-size:8px;color:#94A3B8;font-style:italic}
+.footer-date{font-size:8px;color:#64748B}
+@media print{body{padding:15mm}@page{margin:0;size:A4}button{display:none}}
 </style></head><body>
+<button onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimer</button>
+
 <div class="header">
-  <div class="logo-box"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="20" fill="white"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-  <div><div class="logo-title">Medi<span>Report</span></div><div class="logo-sub">Fiche d'accès patient — Confidentiel</div></div>
-</div>
-<h2>👤 ${prenom} ${nom}</h2>
-<div class="info-grid">
-  <div class="info-box"><div class="info-label">Date de naissance</div><div class="info-val">${dob||"—"}</div></div>
-  <div class="info-box"><div class="info-label">Groupe sanguin</div><div class="info-val">${groupe||"—"}</div></div>
-</div>
-<div class="cred-box">
-  <div class="cred-left">
-    <div class="cred-label">Identifiant</div><div class="cred-val">${login}</div>
-    <div class="cred-label" style="margin-top:14px">Code PIN</div><div class="pin-val">${pin}</div>
+  <div>
+    <div class="logo-title">Medi<span>Report</span></div>
+    <div class="logo-sub">Votre dossier de sante numerique</div>
   </div>
-  <div class="qr-wrap"><img src="${qrData}" alt="QR Code"/><div class="qr-url">Scannez pour accéder</div></div>
+  <div>
+    <div class="doc-title">FICHE D'ACCES PATIENT</div>
+    <div class="doc-meta">Conservez ce document precieusement</div>
+  </div>
 </div>
-<div class="warning">⚠️ Document confidentiel — Ne communiquez votre PIN à personne.</div>
-<div class="steps">
-  <div class="step"><div class="step-num">1</div><div>Scannez le QR code ou allez sur <strong>medireport-kappa.vercel.app/mobile.html</strong></div></div>
-  <div class="step"><div class="step-num">2</div><div><strong>Android :</strong> Menu ⋮ → "Ajouter à l'écran d'accueil" · <strong>iPhone :</strong> Partager ⎙ → "Sur l'écran d'accueil"</div></div>
-  <div class="step"><div class="step-num">3</div><div>Connectez-vous avec votre identifiant et code PIN</div></div>
+
+<div class="section-label">Informations patient</div>
+<div class="info-grid">
+  <div class="info-cell"><div class="info-lbl">Nom complet</div><div class="info-val">${prenom} ${nom}</div></div>
+  <div class="info-cell"><div class="info-lbl">Date de naissance</div><div class="info-val">${dob||"—"}</div></div>
+  <div class="info-cell"><div class="info-lbl">Age</div><div class="info-val">${(()=>{if(!dob||dob==="—")return "—";const p=dob.split("/");return p.length===3?new Date().getFullYear()-parseInt(p[2])+" ans":"—";})()} </div></div>
+  <div class="info-cell"><div class="info-lbl">Groupe sanguin</div><div class="info-val">${groupe||"—"}</div></div>
 </div>
-<div class="footer">🔒 Données protégées — CNDP Maroc • MediReport © ${new Date().getFullYear()}</div>
-<script>window.onload=()=>window.print();<\/script>
+
+<div class="section-label">Vos identifiants de connexion</div>
+<div class="cred-box">
+  <div class="cred-cell">
+    <div class="cred-lbl">Identifiant</div>
+    <div class="cred-login">${login}</div>
+  </div>
+  <div class="cred-cell">
+    <div class="cred-lbl">Code PIN</div>
+    <div class="cred-pin">${pin.split("").join("  ")}</div>
+  </div>
+</div>
+<div class="warning">Ne partagez jamais votre code PIN. Il vous a ete remis en main propre par votre medecin.</div>
+
+<div class="section-label">Acces a l'application</div>
+<div class="access-box">
+  <div>
+    <div class="access-title">Scannez pour acceder</div>
+    <div class="access-url">Ou tapez dans votre navigateur :</div>
+    <div class="access-link">medireport-kappa.vercel.app/mobile.html</div>
+    <div class="access-note">Disponible sur tous smartphones et tablettes.</div>
+  </div>
+  <img class="qr-img" src="${qrData}" alt="QR Code"/>
+</div>
+
+<div class="footer">
+  <div class="footer-note">MediReport · Document confidentiel · Usage personnel uniquement</div>
+  <div class="footer-date">Date de remise : ${dateRemise}</div>
+</div>
+<script>window.onload=()=>setTimeout(()=>window.print(),500);<\/script>
 </body></html>`);
   win.document.close();
 }
