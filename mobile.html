@@ -892,7 +892,7 @@ function printBilanMobile() {
     return new Date(new Date().getFullYear(),m,parseInt(r.day))>=new Date();
   });
 
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=5.0">'
     +'<title>Mon bilan complet</title>'
     +'<style>*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}body{padding:16px;color:#0F172A;font-size:12px}'
     +'.header{border-bottom:2px solid #1A6EFF;padding-bottom:10px;margin-bottom:14px}'
@@ -973,8 +973,7 @@ function printBilanMobile() {
   html += '</body></html>';
 
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
-  document.open();
-  document.write(html);
-  document.close();
+  var w = window.open("", "_blank");
+  if (w) { w.document.write(html); w.document.close(); }
 }
 </script>
