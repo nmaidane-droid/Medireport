@@ -879,8 +879,10 @@ function printBilanMobile() {
   if (!p) return;
 
   // Si données pas encore chargées depuis Supabase, les charger d'abord
-  var hasData = DB.consultations && DB.consultations[p.id] && DB.consultations[p.id].length;
-  if (!hasData) {
+  var hasData = DB.consultations && DB.consultations[p.id] && DB.consultations[p.id].length > 0;
+  var hasLabos = DB.labos && DB.labos[p.id] && DB.labos[p.id].length > 0;
+  var hasImgs = DB.imagerie && DB.imagerie[p.id] && DB.imagerie[p.id].length > 0;
+  if (!hasData && !hasLabos && !hasImgs) {
     var pid = p.id;
     var loaded = 0; var total = 4;
     function done() {
