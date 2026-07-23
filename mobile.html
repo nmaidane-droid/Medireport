@@ -877,6 +877,7 @@ function refreshPatientData() {
 function printBilanMobile() {
   var p = PAT;
   if (!p) return;
+
   var cons = (DB.consultations[p.id]||[]).slice(0,3);
   var labos = (DB.labos[p.id]||[]).slice(0,2);
   var imgs = (DB.imagerie[p.id]||[]).slice(0,2);
@@ -965,8 +966,7 @@ function printBilanMobile() {
   html += '</body></html>';
 
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
-  var blob = new Blob([html], {type:"text/html"});
-  var url = URL.createObjectURL(blob);
-  window.open(url, "_blank");
+  var w = window.open("", "_blank");
+  if (w) { w.document.write(html); w.document.close(); }
 }
 </script>
