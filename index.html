@@ -1296,7 +1296,7 @@ function buildSidebar(){
   nav.appendChild(decoDiv);
 
   const oldBtn=G("btn-out");if(oldBtn)oldBtn.style.display="none";
-  G("search-inp")?.oninput=e=>{if(e.target.value.length>1){currentPage="patients";renderPage();}};
+  const _si=G("search-inp");if(_si)_si.oninput=e=>{if(e.target.value.length>1){currentPage="patients";renderPage();}};
 }
 
 // ══════════════════════════════════════════════════════════
@@ -6618,7 +6618,7 @@ body{background:#fff;padding:20mm;color:#0F172A;font-size:13px}
 function startRealtimePro(){
   if(window._supaWS){ try{window._supaWS.close();}catch(e){} }
 
-  const wsUrl = SUPA_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
+  const wsUrl = _SB_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + _SB_KEY + "&vsn=1.0.0";
   const ws = new WebSocket(wsUrl);
   window._supaWS = ws;
 
