@@ -1579,9 +1579,10 @@ function goBack(){
 
 function showMesPatients(){
   const u = currentUser;
-  const mesPatients = DB.patients.filter(p=>p.medecin_ref===u.id);
+  const createdIds = DB.access.filter(a=>a.userId===u.id&&a.type==="createur").map(a=>a.patientId);
+  const mesPatients = DB.patients.filter(p=>createdIds.includes(p.id));
   const html = mesPatients.map(p=>`
-    <div class="card" style="cursor:pointer;margin-bottom:10px" onclick="openDossier('${p.id}')">
+    <div class="card" style="cursor:pointer;margin-bottom:10px" onclick="this.closest('.mov').remove();openDossier('${p.id}')">
       <div style="display:flex;align-items:center;gap:12px">
         <div class="av" style="background:${p.color}">${p.initials}</div>
         <div style="flex:1">
@@ -1592,7 +1593,7 @@ function showMesPatients(){
         ${p.dialyse?`<span class="badge bt" title="Patient en hémodialyse">💧</span>`:""}
       </div>
     </div>`).join("");
-  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Mes patients (${mesPatients.length})</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">${html||'<div style="text-align:center;padding:30px;color:var(--g400)">Aucun patient référent</div>'}</div></div>`);
+  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Mes patients (${mesPatients.length})</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">${html||'<div style="text-align:center;padding:30px;color:var(--g400)">Aucun patient créé</div>'}</div></div>`);
 }
 
 function goPage(id){
@@ -1969,7 +1970,7 @@ function rDashboard(){
     const myDemAvis = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="en_attente");
     const myDemAvisDone = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="traite");
     statsHtml=`<div class="g4" style="margin-bottom:20px">
-      <div class="stat"><div class="sl">Patients</div><div class="sv">${patients.filter(p=>p.medecin_ref===u.id).length} / ${DB.patients.length}</div></div>
+      <div class="stat"><div class="sl">Patients</div><div class="sv">${DB.access.filter(a=>a.userId===u.id&&a.type==="createur").length} / ${DB.patients.length}</div><div class="ss">propres / réseau</div></div>
       <div class="stat"><div class="sl">RDV confirmés</div><div class="sv">${myRdv.filter(r=>r.s==="confirmé").length}</div></div>
       <div class="stat" style="${myDemAvis.length?'border-color:var(--amber)':''}"><div class="sl">Avis en attente</div><div class="sv" style="color:${myDemAvis.length?'var(--amber)':'var(--g900)'}">${myDemAvis.length}</div><div class="ss">Demandes reçues</div></div>
       <div class="stat"><div class="sl">Avis traités</div><div class="sv">${myDemAvisDone.length}</div><div class="ss">Comptes rendus envoyés</div></div>
