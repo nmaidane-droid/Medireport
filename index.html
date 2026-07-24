@@ -1295,6 +1295,8 @@ async function ocrLaboPDF(input, demandeId){
 
 Réponds UNIQUEMENT avec un JSON valide, sans texte supplémentaire, sans balises markdown :
 {
+  "patient_nom": "nom du patient tel qu'il apparait dans le document",
+  "patient_prenom": "prénom du patient tel qu'il apparait dans le document",
   "resultats": [
     {
       "parametre": "Nom du paramètre",
@@ -1326,6 +1328,42 @@ Extrait TOUS les paramètres visibles dans le document.`
 
     if(!parsed.resultats || !parsed.resultats.length){
       throw new Error("Aucun résultat extrait");
+    }
+
+    // Vérification du nom du patient
+    if(parsed.patient_nom || parsed.patient_prenom) {
+      const p = DB.patients.find(x => {
+        // Récupérer le patient du dossier ouvert
+        return dossierPatientId && x.id === dossierPatientId;
+      }) || DB.patients.find(x => x.id === dossierPatientId);
+
+      if(p) {
+        // Normaliser : minuscules, sans accents
+        const norm = s => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+        const pNom = norm(p.nom); const pPre = norm(p.prenom);
+        const docNom = norm(parsed.patient_nom); const docPre = norm(parsed.patient_prenom);
+
+        // Vérifier dans les 2 sens (nom/prénom peuvent être inversés)
+        const match1 = docNom.includes(pNom) || pNom.includes(docNom);
+        const match2 = docPre.includes(pPre) || pPre.includes(docPre);
+        const match3 = docNom.includes(pPre) || docPre.includes(pNom); // inversé
+
+        if(!(match1 && match2) && !match3) {
+          const docFull = (parsed.patient_nom + " " + parsed.patient_prenom).trim();
+          const patFull = p.prenom + " " + p.nom;
+          const confirmed = confirm(
+            "⚠️ ATTENTION — Vérification du patient\n\n" +
+            "Nom dans le PDF : " + docFull + "\n" +
+            "Patient du dossier : " + patFull + "\n\n" +
+            "Les noms ne correspondent pas. Voulez-vous quand même importer ces résultats ?"
+          );
+          if(!confirmed) {
+            if(status){ status.textContent = "❌ Import annulé — les noms ne correspondent pas."; status.style.color="var(--red)"; }
+            input.value = "";
+            return;
+          }
+        }
+      }
     }
 
     // Fill the form with extracted results
