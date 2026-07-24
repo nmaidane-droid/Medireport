@@ -2168,7 +2168,10 @@ function dSynthese(){
   const rxArretés = (DB.rx[p.id]||[]).filter(r=>r.s==="stopped");
   const cons = DB.consultations[p.id]||[];
   const labos = DB.labos[p.id]||[];
-  const rdvs = DB.rdv.filter(r=>r.patientId===p.id);
+  const _mths2={Jan:0,Janv:0,Fév:1,Fevr:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Aout:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11,Dec:11};
+  const _rd2=r=>new Date(new Date().getFullYear(),_mths2[r.mo]||0,parseInt(r.day)||1);
+  const _today2=new Date(); _today2.setHours(0,0,0,0);
+  const rdvs = DB.rdv.filter(r=>r.patientId===p.id&&_rd2(r)>=_today2).sort((a,b)=>_rd2(a)-_rd2(b));
   const ref = DB.users.find(x=>x.id===p.medecin_ref);
   const titrRef = ref?.titre||"Dr.";
 
@@ -2248,7 +2251,7 @@ function dSynthese(){
     </div>`).join("");
 
   // Prochains RDV
-  const rdvHtml = rdvs.slice(0,3).map(r=>{
+  const rdvHtml = rdvs.map(r=>{
     const drU=DB.users.find(x=>x.id===r.dr);
     return `<div style="display:flex;gap:10px;align-items:center;padding:8px 10px;background:var(--g50);border-radius:8px;margin-bottom:6px">
       <div style="width:40px;height:40px;border-radius:8px;background:${r.c};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
@@ -2333,9 +2336,23 @@ function dSynthese(){
 }
 
 
+function showAllConsultations(pid){
+  const p=DB.patients.find(x=>x.id===pid);
+  if(!p) return;
+  const cons=sortByDate(DB.consultations[p.id]||[], 'date', false);
+  const html=cons.map(c=>{
+    const isOphtalm = (c.spec||"").toLowerCase().includes("ophtalm");
+    const ophBtn = isOphtalm && c.constantes ? `<button onclick="event.stopPropagation();printOrdonnanceLunettes('${c.id}','${p.id}')" style="background:#0BA896;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">👓 Ordonnance lunettes</button>` : "";
+    return `<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
+  }).join("");
+  G("dossier-content").innerHTML=html||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucune consultation</div>`;
+}
+
 function dConsultations(){
   const p=DB.patients.find(x=>x.id===currentPatientId);const u=currentUser;const isMed=["medecin","specialiste","admin"].includes(u.role);const cons=sortByDate(DB.consultations[p.id]||[], 'date', false);
-  const html=cons.map(c=>{
+  const consLimit = cons.length > 10;
+  const consShown = consLimit ? cons.slice(0,10) : cons;
+  const html=consShown.map(c=>{
     const isOphtalm = (c.spec||"").toLowerCase().includes("ophtalm");
     const ophBtn = isOphtalm && c.constantes ? `<button onclick="event.stopPropagation();printOrdonnanceLunettes('${c.id}','${p.id}')" style="background:#0BA896;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">👓 Ordonnance lunettes</button>` : "";
     return `<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
@@ -4241,6 +4258,7 @@ function dRx(){
   const stoppedHtml=sortedGroups(stoppedGroups).map(g=>renderOrdGroup(g,"#9CA3AF")).join("")||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucun traitement arrêté</div>`;
   const allergyHtml=allergies.map(r=>ale("d","Allergie — "+r.med,"Contre-indication absolue")).join("")||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucune allergie médicamenteuse</div>`;
   const showTab=(t)=>{rxTab=t;document.querySelectorAll(".rx-tab").forEach(x=>x.classList.toggle("on",x.dataset.tab===t));G("rx-tab-content").innerHTML={active:activeHtml,stopped:stoppedHtml,allergy:allergyHtml}[t]||"";};
+  const voirToutBtn = consLimit ? `<div style="text-align:center;margin-top:12px"><button class="btn bs" onclick="showAllConsultations('${p.id}')">Voir toutes les consultations (${cons.length})</button></div>` : "";
   G("dossier-content").innerHTML=`${allergyAlerts}<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px"><div class="dv-tabs" style="margin-bottom:0"><div class="dv-tab rx-tab${rxTab==="active"?" on":""}" data-tab="active">Actifs (${active.length})</div><div class="dv-tab rx-tab${rxTab==="stopped"?" on":""}" data-tab="stopped">Arrêtés (${stopped.length})</div><div class="dv-tab rx-tab${rxTab==="allergy"?" on":""}" data-tab="allergy">Allergies (${allergies.length})</div></div>${isMed?`<button class="btn bp" onclick="showAddRx('${p.id}')">+ Nouvelle ordonnance</button>`:""}
       <div style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#F1F5F9;border:1px dashed #CBD5E1;border-radius:8px;font-size:12px;color:#94A3B8;cursor:not-allowed">
         🏥 <span style="font-weight:600">Pharmacie</span> <span style="background:#E2E8F0;color:#64748B;font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px">En développement</span>
@@ -4450,8 +4468,12 @@ function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><spa
 function rAgenda(){
   const u=currentUser;
   const months2idx = {Jan:0,Janv:0,Fév:1,Fevr:1,Mar:2,Mars:2,Avr:3,Avri:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Aout:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11,Dec:11};
+  const _todayA=new Date(); _todayA.setHours(0,0,0,0);
   const rdvBase = u.role==="admin" ? DB.rdv : DB.rdv.filter(r=>r.dr===u.id);
-  const myRdv = rdvBase.slice().sort((a,b)=>{
+  const myRdv = rdvBase.filter(r=>{
+    const d=new Date(new Date().getFullYear(),months2idx[r.mo]||0,parseInt(r.day)||1);
+    return d>=_todayA;
+  }).sort((a,b)=>{
     const da = new Date(new Date().getFullYear(), months2idx[a.mo]||0, parseInt(a.day)||1);
     const db2 = new Date(new Date().getFullYear(), months2idx[b.mo]||0, parseInt(b.day)||1);
     if(da-db2 !== 0) return da-db2;
