@@ -1951,7 +1951,7 @@ function rDashboard(){
     const myDemAvis = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="en_attente");
     const myDemAvisDone = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="traite");
     statsHtml=`<div class="g4" style="margin-bottom:20px">
-      <div class="stat"><div class="sl">Mes patients</div><div class="sv">${patients.length}</div><div class="ss">Dossiers accessibles</div></div>
+      <div class="stat"><div class="sl">Propres patients</div><div class="sv">${patients.filter(p=>p.medecin_ref===u.id).length}</div><div class="ss">${DB.patients.length} patients au total</div></div>
       <div class="stat"><div class="sl">RDV confirmés</div><div class="sv">${myRdv.filter(r=>r.s==="confirmé").length}</div></div>
       <div class="stat" style="${myDemAvis.length?'border-color:var(--amber)':''}"><div class="sl">Avis en attente</div><div class="sv" style="color:${myDemAvis.length?'var(--amber)':'var(--g900)'}">${myDemAvis.length}</div><div class="ss">Demandes reçues</div></div>
       <div class="stat"><div class="sl">Avis traités</div><div class="sv">${myDemAvisDone.length}</div><div class="ss">Comptes rendus envoyés</div></div>
