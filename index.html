@@ -1005,36 +1005,17 @@ function doLogin(){
     return;
   }
 
-  if(lsPinEntry.length<6){
-    if(errEl){errEl.textContent="Saisissez votre code PIN (6 chiffres)";errEl.style.color="var(--red)";}
-    return;
-  }
-
-  // Si users vide, charger depuis Supabase puis valider
-  if(!DB.users||!DB.users.length){
-    if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Connexion..."; }
-    const savedPin = lsPinEntry;
-    supaFetch("users?select=*").then(rows=>{
-      if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
-      lsPinEntry = savedPin;
-      if(errEl) errEl.textContent="";
-      _validateLogin(loginVal, errEl);
-    }).catch(()=>{
-      if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}
-    });
-    return;
-  }
-
-  _validateLogin(loginVal, errEl);
-}
-
-function _validateLogin(loginVal, errEl){
   const user=DB.users.find(u=>(u.login||"").toLowerCase()===loginVal);
 
   if(!user){
     if(errEl){errEl.textContent="Identifiant inconnu";errEl.style.color="var(--red)";}
     for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
     setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
+    return;
+  }
+
+  if(lsPinEntry.length<6){
+    if(errEl){errEl.textContent="Saisissez votre code PIN (6 chiffres)";errEl.style.color="var(--red)";}
     return;
   }
 
