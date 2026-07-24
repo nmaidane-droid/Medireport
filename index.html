@@ -1007,13 +1007,19 @@ function doLogin(){
 
   // Charger depuis Supabase si cache vide, puis réessayer
   if(!DB.users||!DB.users.length){
+    const _savedPin = lsPinEntry;
+    const _savedLogin = loginVal;
     loadDBFromSupabase().then(freshDB=>{
       if(freshDB&&freshDB.users&&freshDB.users.length){
         DB=freshDB;
+        lsPinEntry=_savedPin;
+        document.getElementById("ls-login-inp").value=_savedLogin;
         doLogin();
       } else {
         if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}
       }
+    }).catch(()=>{
+      if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}
     });
     return;
   }
