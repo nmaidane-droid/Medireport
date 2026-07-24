@@ -1069,7 +1069,7 @@ function doLogin(){
     currentUser = freshUser;
 
     // Charger les seen items depuis Supabase
-    loadSeenSupabase(freshUser.id).then(()=>{ renderApp(); });
+    loadSeenSupabase(freshUser.id).then(()=>{ renderPage(); });
     if(!DB.logs) DB.logs=[];
     DB.logs.push({
       type:"connexion",
