@@ -871,6 +871,12 @@ async function syncToSupabase(db){
 }
 
 let DB = loadDBLocal();
+// Si cache vide, précharger les users depuis Supabase silencieusement
+if(!DB.users||!DB.users.length){
+  supaFetch("users?select=*").then(rows=>{
+    if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
+  }).catch(()=>{});
+}
 let currentUser = null;
 let currentPage = "dashboard";
 let currentPatientId = null;
