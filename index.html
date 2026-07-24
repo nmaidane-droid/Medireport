@@ -2200,11 +2200,11 @@ function dSynthese(){
   const rxActifs = (DB.rx[p.id]||[]).filter(r=>r.s==="active");
   const rxArretés = (DB.rx[p.id]||[]).filter(r=>r.s==="stopped");
   const cons = DB.consultations[p.id]||[];
-  const labos = DB.labos[p.id]||[];
+  const labos = sortByDate(DB.labos[p.id]||[], 'date', false);
   const _mths2={Jan:0,Janv:0,Fév:1,Fevr:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Aout:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11,Dec:11};
   const _rd2=r=>new Date(new Date().getFullYear(),_mths2[r.mo]||0,parseInt(r.day)||1);
   const _today2=new Date(); _today2.setHours(0,0,0,0);
-  const rdvs = DB.rdv.filter(r=>r.patientId===p.id&&_rd2(r)>=_today2).sort((a,b)=>_rd2(a)-_rd2(b));
+  const rdvs = DB.rdv.filter((r,i,a)=>r.patientId===p.id&&_rd2(r)>=_today2&&a.findIndex(x=>x.id===r.id)===i).sort((a,b)=>_rd2(a)-_rd2(b));
   const ref = DB.users.find(x=>x.id===p.medecin_ref);
   const titrRef = ref?.titre||"Dr.";
 
@@ -4344,9 +4344,12 @@ function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=
   const months={Jan:0,Janv:0,Fév:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11};
   const now=new Date();
   const today=new Date(); today.setHours(0,0,0,0);
+  const seen=new Set();
   return DB.rdv.filter(r=>{
+    if(seen.has(r.id)) return false;
+    seen.add(r.id);
     const da=new Date(now.getFullYear(),months[r.mo]||0,parseInt(r.day)||1);
-    return da>=today;
+    return r.patientId===p.id && da>=today;
   }).sort((a,b)=>{
     const da=new Date(now.getFullYear(),months[a.mo]||0,parseInt(a.day)||1);
     const db2=new Date(now.getFullYear(),months[b.mo]||0,parseInt(b.day)||1);
@@ -6140,7 +6143,14 @@ function doLogout(){
 
 // Reset timer on any user activity
 ["mousemove","keydown","click","scroll","touchstart"].forEach(evt=>{
-  document.addEventListener(evt, ()=>{ if(currentUser) resetSessionTimer(); }, {passive:true});
+  document.addEventListener(evt, ()=>{
+    if(currentUser){
+      resetSessionTimer();
+      // Cacher le bandeau warning immédiatement si visible
+      const w=document.getElementById("session-warning");
+      if(w) w.style.display="none";
+    }
+  }, {passive:true});
 });
 
 // Global keyboard shortcuts
