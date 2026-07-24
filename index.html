@@ -1702,6 +1702,8 @@ function showPinPad(user, onSuccess){
         <div class="pin-dot" id="pd1"></div>
         <div class="pin-dot" id="pd2"></div>
         <div class="pin-dot" id="pd3"></div>
+        <div class="pin-dot" id="pd4"></div>
+        <div class="pin-dot" id="pd5"></div>
       </div>
       <div class="pin-error" id="pin-err"></div>
       <div class="pin-grid">
@@ -1716,7 +1718,7 @@ function showPinPad(user, onSuccess){
   document.body.appendChild(overlay);
 
   function updateDots(){
-    for(let i=0;i<4;i++){
+    for(let i=0;i<6;i++){
       const dot = document.getElementById("pd"+i);
       if(dot) dot.className = "pin-dot" + (i < entered.length ? " filled" : "");
     }
@@ -1724,7 +1726,7 @@ function showPinPad(user, onSuccess){
 
   function shakeError(msg){
     document.getElementById("pin-err").textContent = msg;
-    for(let i=0;i<4;i++){
+    for(let i=0;i<6;i++){
       const dot = document.getElementById("pd"+i);
       if(dot) dot.className = "pin-dot error";
     }
@@ -1737,12 +1739,12 @@ function showPinPad(user, onSuccess){
       updateDots();
       return;
     }
-    if(entered.length >= 4) return;
+    if(entered.length >= 6) return;
     entered += k;
     updateDots();
-    if(entered.length === 4){
+    if(entered.length === 6){
       setTimeout(()=>{
-        if(entered === (user.pin||"0000")){
+        if(entered === (user.pin||"000000")){
           overlay.remove();
           onSuccess();
         } else {
