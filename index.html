@@ -966,18 +966,11 @@ function openLoginModal(){
   if(inp){ inp.value=""; inp.placeholder=""; }
   const m=document.getElementById("login-modal");
   if(m){ m.style.display="flex"; setTimeout(()=>{ if(inp)inp.focus(); },100); }
-  // Précharger les users si cache vide — bloquer la saisie jusqu'au chargement
+  // Précharger les users si cache vide
   if(!DB.users||!DB.users.length){
-    const pinBtns = document.querySelectorAll(".pin-key, #ls-login-inp");
-    pinBtns.forEach(b=>b.disabled=true);
-    if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Chargement..."; }
     supaFetch("users?select=*").then(rows=>{
       if(rows&&rows.length) DB.users=rows.map(u=>({...u,patientId:u.patient_id}));
-      pinBtns.forEach(b=>b.disabled=false);
-      if(errEl) errEl.textContent="";
-      const inp=document.getElementById("ls-login-inp");
-      if(inp) inp.focus();
-    }).catch(()=>{ if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";} });
+    }).catch(()=>{});
   }
 }
 
@@ -1018,12 +1011,19 @@ function doLogin(){
     return;
   }
 
+  // Si users pas encore chargés, réessayer dans 500ms
+  if(!DB.users||!DB.users.length){
+    if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Connexion..."; }
+    setTimeout(()=>{ if(errEl) errEl.textContent=""; doLogin(); }, 800);
+    return;
+  }
+
   const user=DB.users.find(u=>(u.login||"").toLowerCase()===loginVal);
 
   if(!user){
     if(errEl){errEl.textContent="Identifiant inconnu";errEl.style.color="var(--red)";}
-    for(let i=0;i<4;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
-    setTimeout(()=>{lsPinEntry="";for(let i=0;i<4;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
+    for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
+    setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
     return;
   }
 
