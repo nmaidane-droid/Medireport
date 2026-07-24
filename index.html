@@ -1958,7 +1958,7 @@ function rDashboard(){
   const diffMon = (dow === 0) ? -6 : 1 - dow;
   const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() + diffMon); startOfWeek.setHours(0,0,0,0);
   const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6); endOfWeek.setHours(23,59,59,999);
-  const months = {"Jan":0,"Fév":1,"Mar":2,"Avr":3,"Mai":4,"Jun":5,"Jul":6,"Juil":6,"Aoû":7,"Août":7,"Sep":8,"Oct":9,"Nov":10,"Déc":11};
+  const months = {"Jan":0,"Janv":0,"Fév":1,"Fevr":1,"Mar":2,"Mars":2,"Avr":3,"Mai":4,"Jun":5,"Juin":5,"Jul":6,"Juil":6,"Aoû":7,"Août":7,"Aout":7,"Sep":8,"Sept":8,"Oct":9,"Nov":10,"Déc":11,"Dec":11};
   const rdvBase = u.role==="admin" ? DB.rdv : DB.rdv.filter(r=>r.dr===u.id);
   const weekRdv = rdvBase.filter(r=>{
     const mo = months[r.mo];
@@ -1968,8 +1968,8 @@ function rDashboard(){
   }).sort((a,b)=>{
     const da = new Date(now.getFullYear(), months[a.mo]||0, parseInt(a.day)||1);
     const db2 = new Date(now.getFullYear(), months[b.mo]||0, parseInt(b.day)||1);
-    if(da-db2 !== 0) return db2-da;
-    return (b.h||"").localeCompare(a.h||"");
+    if(da-db2 !== 0) return da-db2;
+    return (a.h||"").localeCompare(b.h||"");
   });
   const upcomingRdv=weekRdv.map(r=>{const p=DB.patients.find(x=>x.id===r.patientId);const drU=DB.users.find(x=>x.id===r.dr);return `<div class="ur" style="cursor:pointer" onclick="openDossier('${r.patientId}')"><div style="width:44px;height:44px;border-radius:8px;background:${r.c};display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;flex-shrink:0"><div style="font-size:16px;font-weight:900;line-height:1">${r.day}</div><div style="font-size:9px;opacity:.8">${r.mo}</div></div><div style="flex:1"><div class="ur-name">${p?p.prenom+" "+p.nom:"—"}</div><div class="ur-meta">${r.h} · ${r.spec}</div></div>${r.s==="confirmé"?bdg("Confirmé","bgn"):bdg("À confirmer","ba")}</div>`;}).join("");
   const canCreate=["admin","medecin"].includes(u.role);
@@ -4292,7 +4292,11 @@ function showAddRx(pid){
 function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=(()=>{
   const months={Jan:0,Janv:0,Fév:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11};
   const now=new Date();
-  return DB.rdv.filter(r=>r.patientId===p.id).sort((a,b)=>{
+  const today=new Date(); today.setHours(0,0,0,0);
+  return DB.rdv.filter(r=>{
+    const da=new Date(now.getFullYear(),months[r.mo]||0,parseInt(r.day)||1);
+    return da>=today;
+  }).sort((a,b)=>{
     const da=new Date(now.getFullYear(),months[a.mo]||0,parseInt(a.day)||1);
     const db2=new Date(now.getFullYear(),months[b.mo]||0,parseInt(b.day)||1);
     return da-db2||(a.h||"").localeCompare(b.h||"");
@@ -6158,11 +6162,10 @@ function printBilanComplet(pid) {
   const labos = (DB.labos[pid]||[]).slice(0,2);
   const imgs = (DB.imagerie[pid]||[]).slice(0,2);
   const rxActifs = (DB.rx[pid]||[]).filter(r=>r.s==="active");
-  const rdvs = (DB.rdv||[]).filter(r=>r.patientId===pid).sort((a,b)=>{
-    const pd=d=>{if(!d)return 0;const p=d.split("/");return p.length===3?new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime():0;};
-    return pd(a.date)-pd(b.date);
-  });
-  const nextRdv = rdvs.find(r=>{ const p=r.date?r.date.split("/"):[];return p.length===3&&new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]))>=new Date(); });
+  const _mths = {Jan:0,Janv:0,Fév:1,Fevr:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Aout:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11,Dec:11};
+  const _rdvDate = r => new Date(new Date().getFullYear(), _mths[r.mo]||0, parseInt(r.day)||1);
+  const rdvs = (DB.rdv||[]).filter(r=>r.patientId===pid).sort((a,b)=>_rdvDate(a)-_rdvDate(b));
+  const nextRdv = rdvs.find(r=>_rdvDate(r)>=new Date());
 
   if(sessionTimer) clearTimeout(sessionTimer);
   window.addEventListener("focus", resetSessionTimer, {once:true});
