@@ -382,7 +382,6 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
     </div>
     <div class="tb">
       <div class="tb-title" id="pg-tit">Tableau de bord</div>
-      <div class="sw"><span class="sw-ico">🔍</span><input id="search-inp" placeholder="Rechercher un patient..."/></div>
       <button class="btn bico" id="btn-notif" title="Notifications" onclick="toggleNotifPanel()" style="position:relative">
         🔔<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span>
       </button>
@@ -1297,7 +1296,7 @@ function buildSidebar(){
   nav.appendChild(decoDiv);
 
   const oldBtn=G("btn-out");if(oldBtn)oldBtn.style.display="none";
-  G("search-inp").oninput=e=>{if(e.target.value.length>1){currentPage="patients";renderPage();}};
+  G("search-inp")?.oninput=e=>{if(e.target.value.length>1){currentPage="patients";renderPage();}};
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2053,7 +2052,7 @@ function rDashboard(){
 
 function rPatients(){
   const u=currentUser;
-  const search=(G("search-inp").value||"").toLowerCase();
+  const search=(G("search-inp")?.value||"").toLowerCase();
   let patients=getAccessiblePatients(u.id);
   if(search) patients=patients.filter(p=>
     (p.prenom+" "+p.nom).toLowerCase().includes(search)||
@@ -2213,17 +2212,20 @@ function dSynthese(){
   const dialyseAlert = p.dialyse ? ale("i","💧 Patient en hémodialyse",p.seances_semaine+" séances/semaine · Accès vasculaire : "+p.type_acces) : "";
 
   // Dernières constantes depuis la dernière consultation
-  const lastConsWithConst = cons.find(c=>c.constantes&&Object.keys(c.constantes).length);
-  const constHtml = lastConsWithConst ? `
+  // Rapport de la dernière consultation
+  const lastCons = sortByDate(cons, 'date', false)[0];
+  const lastConsDr = lastCons ? DB.users.find(x=>x.id===lastCons.dr) : null;
+  const lastConsDrLabel = lastConsDr ? `${lastConsDr.titre||"Dr."} ${lastConsDr.nom}${lastConsDr.spec?" · "+lastConsDr.spec:""}` : "—";
+  const constHtml = lastCons ? `
     <div class="card" style="margin-bottom:14px">
-      <div class="ch"><div class="ctit"><span class="ci">📊</span> Dernières constantes</div><div style="font-size:11px;color:var(--g400)">${lastConsWithConst.date} · ${uShort(lastConsWithConst.dr)}</div></div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
-        ${Object.entries(lastConsWithConst.constantes).map(([k,v])=>`
-          <div style="background:var(--g50);border:1px solid var(--g200);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:10px;font-weight:700;color:var(--g400);text-transform:uppercase;margin-bottom:4px">${k}</div>
-            <div style="font-size:15px;font-weight:800;color:var(--g900)">${v}</div>
-          </div>`).join("")}
+      <div class="ch">
+        <div class="ctit"><span class="ci">📋</span> Dernière consultation</div>
+        <div style="font-size:11px;color:var(--g400)">${lastCons.date} · ${lastConsDrLabel}</div>
       </div>
+      ${lastCons.motif ? `<div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px">Motif : ${lastCons.motif}</div>` : ""}
+      <div style="font-size:13px;color:var(--g700);line-height:1.7;background:var(--g50);border:1px solid var(--g200);border-radius:8px;padding:12px 14px">${lastCons.cr||"<span style=\"color:var(--g400)\">Aucun compte rendu</span>"}</div>
+      ${lastCons.tags?.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${lastCons.tags.map(t=>bdg(t,"bgr")).join("")}</div>` : ""}
+      <div style="margin-top:10px;text-align:right"><button class="btn bs bsm" onclick="switchDossierTab('consultations')">Voir toutes les consultations →</button></div>
     </div>` : "";
 
   // Derniers résultats labo significatifs (hors norme)
@@ -3952,12 +3954,12 @@ function dImagerie(){
     <div style="display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--g200);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:var(--tr)"
       onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--g200)'"
       onclick="showImgDetail('${img.id}','${p.id}')">
-      <div style="width:44px;height:44px;border-radius:8px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${img.ico}</div>
+      <div style="width:44px;height:44px;border-radius:8px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${({Scanner:"🔭",IRM:"🧲",Mammographie:"🎯",Radiographie:"📷","Échographie":"🔊"}[((img.type||"").split("(")[0].trim())])||"🔬"}</div>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:700;color:var(--g900);margin-bottom:3px">${img.type}</div>
-        <div style="font-size:11px;color:var(--g400)">${img.date} · ${uName(img.centre)} · ${uShort(img.presc)}</div>
+        <div style="font-size:11px;color:var(--g400)">${img.date} · ${uName(img.centre)} · ${uShort(img.dr_demandeur)}</div>
         ${img.ref?`<div style="font-size:10px;color:var(--g300);margin-top:2px">Réf: ${img.ref}</div>`:""}
-        <div style="margin-top:6px">${img.rc==="g"?bdg("✓ "+img.res,"bgn"):bdg(img.res,"ba")}</div>
+        <div style="margin-top:6px">${img.resultat&&img.resultat.toLowerCase().includes("normal")?bdg("✓ "+(img.resultat||"Normal"),"bgn"):bdg(img.resultat||"—","ba")}</div>
       </div>
       <span style="color:var(--g300);font-size:18px">›</span>
     </div>`).join("");
@@ -4204,7 +4206,7 @@ Réponds UNIQUEMENT avec le JSON.` }
 }
 
 
-function showImgDetail(iid,pid){const img=(DB.imagerie[pid]||[]).find(x=>x.id===iid);if(!img)return;modal(`<div class="mb"><div class="mh"><span class="mt2">${img.type}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${bdg(uName(img.centre),"bb")} ${bdg(img.date,"bgr")} ${img.rc==="g"?bdg("✓ "+img.res,"bgn"):bdg(img.res,"ba")}</div><div class="fg"><label>Prescrit par</label><div style="font-size:13px;color:var(--g600)">${uShort(img.presc)}</div></div><div class="fg"><label>Compte rendu</label><div style="font-size:13px;color:var(--g700);line-height:1.7;background:var(--g50);border:1px solid var(--g200);border-radius:8px;padding:12px 14px">${img.cr}</div></div></div></div>`);}
+function showImgDetail(iid,pid){const img=(DB.imagerie[pid]||[]).find(x=>x.id===iid);if(!img)return;modal(`<div class="mb"><div class="mh"><span class="mt2">${img.type}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${bdg(uName(img.centre),"bb")} ${bdg(img.date,"bgr")} ${img.resultat&&img.resultat.toLowerCase().includes("normal")?bdg("✓ "+(img.resultat||"Normal"),"bgn"):bdg(img.resultat||"—","ba")}</div><div class="fg"><label>Prescrit par</label><div style="font-size:13px;color:var(--g600)">${uShort(img.dr_demandeur)}</div></div><div class="fg"><label>Compte rendu</label><div style="font-size:13px;color:var(--g700);line-height:1.7;background:var(--g50);border:1px solid var(--g200);border-radius:8px;padding:12px 14px">${img.conclusion||"—"}</div></div></div></div>`);}
 
 let rxTab="active";
 function toggleOrd(id){const body=document.getElementById("body-"+id);const arr=document.getElementById("arr-"+id);const hd=document.getElementById("hd-"+id);if(!body)return;const isOpen=body.style.display!=="none";body.style.display=isOpen?"none":"block";if(arr)arr.style.transform=isOpen?"":"rotate(90deg)";if(arr)arr.textContent=isOpen?"▸":"▾";if(hd)hd.style.background=isOpen?"var(--g50)":"var(--blue-l)";}
@@ -4291,7 +4293,6 @@ function dRx(){
   const stoppedHtml=sortedGroups(stoppedGroups).map(g=>renderOrdGroup(g,"#9CA3AF")).join("")||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucun traitement arrêté</div>`;
   const allergyHtml=allergies.map(r=>ale("d","Allergie — "+r.med,"Contre-indication absolue")).join("")||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucune allergie médicamenteuse</div>`;
   const showTab=(t)=>{rxTab=t;document.querySelectorAll(".rx-tab").forEach(x=>x.classList.toggle("on",x.dataset.tab===t));G("rx-tab-content").innerHTML={active:activeHtml,stopped:stoppedHtml,allergy:allergyHtml}[t]||"";};
-  const voirToutBtn = consLimit ? `<div style="text-align:center;margin-top:12px"><button class="btn bs" onclick="showAllConsultations('${p.id}')">Voir toutes les consultations (${cons.length})</button></div>` : "";
   G("dossier-content").innerHTML=`${allergyAlerts}<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px"><div class="dv-tabs" style="margin-bottom:0"><div class="dv-tab rx-tab${rxTab==="active"?" on":""}" data-tab="active">Actifs (${active.length})</div><div class="dv-tab rx-tab${rxTab==="stopped"?" on":""}" data-tab="stopped">Arrêtés (${stopped.length})</div><div class="dv-tab rx-tab${rxTab==="allergy"?" on":""}" data-tab="allergy">Allergies (${allergies.length})</div></div>${isMed?`<button class="btn bp" onclick="showAddRx('${p.id}')">+ Nouvelle ordonnance</button>`:""}
       <div style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#F1F5F9;border:1px dashed #CBD5E1;border-radius:8px;font-size:12px;color:#94A3B8;cursor:not-allowed">
         🏥 <span style="font-weight:600">Pharmacie</span> <span style="background:#E2E8F0;color:#64748B;font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px">En développement</span>
