@@ -537,6 +537,12 @@ function isSeen(userId, itemId, itemType) {
 const _SB_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
 const _SB_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
 
+// ── Admin hardcodé (indépendant de Supabase) ─────────────
+const _ADMIN_LOGIN = "admin";
+const _ADMIN_PIN_HASH = "c27930584abbf709a1858e7e75ec8e0e579cffd2d56c36142f15190a4df3a4c2";
+const _ADMIN_USER = {id:"u_admin",prenom:"Administrateur",nom:"",role:"admin",login:"admin",initials:"AD",color:"#1A6EFF",pin:null};
+async function _hashPin(pin){ const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin)); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join(""); }
+
 async function supaFetch(path, opts){
   const url = _SB_URL + "/rest/v1/" + path;
   const headers = {
@@ -1032,6 +1038,26 @@ function doLogin(){
       if(errEl) errEl.textContent="";
       doLogin();
     }).catch(()=>{if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}});
+    return;
+  }
+
+  // ── Vérification admin hardcodé en priorité ──
+  if(loginVal === _ADMIN_LOGIN){
+    _hashPin(lsPinEntry).then(hash=>{
+      if(hash === _ADMIN_PIN_HASH){
+        lsPinEntry="";
+        currentUser = _ADMIN_USER;
+        if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Chargement des données…";}
+        loadDBFromSupabase().then(freshDB=>{
+          DB=freshDB;
+          loadSeenSupabase(_ADMIN_USER.id).then(()=>{ renderPage(); });
+        }).catch(()=>{ DB=DB||{users:[],patients:[],consultations:{},labos:{},rx:{},imagerie:{},rdv:[],access:[],demandes_labo:[],demandes_avis:[]}; renderPage(); });
+      } else {
+        if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
+        for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
+        setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
+      }
+    });
     return;
   }
 
