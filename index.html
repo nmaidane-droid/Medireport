@@ -1577,6 +1577,24 @@ function goBack(){
   goPage(first);
 }
 
+function showMesPatients(){
+  const u = currentUser;
+  const mesPatients = DB.patients.filter(p=>p.medecin_ref===u.id);
+  const html = mesPatients.map(p=>`
+    <div class="card" style="cursor:pointer;margin-bottom:10px" onclick="openDossier('${p.id}')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="av" style="background:${p.color}">${p.initials}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:800;color:var(--g900)">${p.prenom} ${p.nom}</div>
+          <div style="font-size:12px;color:var(--g500);margin-top:2px">${p.age} ans · ${p.ville||"—"} · ${(p.pathologies||[]).join(", ")||"—"}</div>
+        </div>
+        ${p.allergies?.length?`<span class="badge br" title="Allergie documentée">⚠</span>`:""}
+        ${p.dialyse?`<span class="badge bt" title="Patient en hémodialyse">💧</span>`:""}
+      </div>
+    </div>`).join("");
+  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Mes patients (${mesPatients.length})</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">${html||'<div style="text-align:center;padding:30px;color:var(--g400)">Aucun patient référent</div>'}</div></div>`);
+}
+
 function goPage(id){
   currentPage=id;
   G("pg-tit").textContent=NAV_CFG[id]?.l||"";
@@ -2047,7 +2065,7 @@ function rDashboard(){
     </div>`:''}
   ` : "";
 
-  G("pg-dashboard").innerHTML=`${statsHtml}${returnsHtml}<div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div><div style="display:flex;gap:8px">${canCreate?`<button class="btn bs bsm" onclick="showAddPatient()">+ Nouveau</button>`:""}${u.role!=="patient"?`<button class="btn bp bsm" onclick="goPage('patients')">Voir tous →</button>`:""}</div></div>${recentHtml||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun patient</div>`}</div><div class="card"><div class="ch"><div class="ctit"><span class="ci">📅</span> RDV de la semaine</div></div>${upcomingRdv||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun RDV cette semaine</div>`}</div></div>`;
+  G("pg-dashboard").innerHTML=`${statsHtml}${returnsHtml}<div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div><div style="display:flex;gap:8px">${canCreate?`<button class="btn bs bsm" onclick="showAddPatient()">+ Nouveau</button>`:""}${u.role!=="patient"?`<button class="btn bp bsm" onclick="goPage('patients')">Voir tous →</button><button class="btn bs bsm" onclick="showMesPatients()">👤 Mes patients</button>`:""}</div></div>${recentHtml||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun patient</div>`}</div><div class="card"><div class="ch"><div class="ctit"><span class="ci">📅</span> RDV de la semaine</div></div>${upcomingRdv||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun RDV cette semaine</div>`}</div></div>`;
 }
 
 function rPatients(){
