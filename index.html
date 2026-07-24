@@ -966,6 +966,12 @@ function openLoginModal(){
   if(inp){ inp.value=""; inp.placeholder=""; }
   const m=document.getElementById("login-modal");
   if(m){ m.style.display="flex"; setTimeout(()=>{ if(inp)inp.focus(); },100); }
+  // Précharger les users si cache vide
+  if(!DB.users||!DB.users.length){
+    supaFetch("users?select=*").then(rows=>{
+      if(rows&&rows.length) DB.users=rows.map(u=>({...u,patientId:u.patient_id}));
+    }).catch(()=>{});
+  }
 }
 
 function closeLoginModal(){
@@ -1714,7 +1720,7 @@ function showPinPad(user, onSuccess){
       const dot = document.getElementById("pd"+i);
       if(dot) dot.className = "pin-dot error";
     }
-    setTimeout(()=>{ entered=""; updateDots(); document.getElementById("pin-err").textContent=""; },1200);
+    setTimeout(()=>{ entered=""; for(let i=0;i<6;i++){const d=document.getElementById("pd"+i);if(d)d.className="pin-dot";} document.getElementById("pin-err").textContent=""; },1200);
   }
 
   function pressKey(k){
