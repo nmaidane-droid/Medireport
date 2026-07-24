@@ -535,6 +535,23 @@ function isSeen(userId, itemId, itemType) {
 }
 
 
+const _SB_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
+const _SB_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
+
+async function supaFetch(path, opts){
+  const url = _SB_URL + "/rest/v1/" + path;
+  const headers = {
+    "apikey": _SB_KEY,
+    "Authorization": "Bearer " + _SB_KEY,
+    "Content-Type": "application/json",
+    "Prefer": opts?.prefer || (opts?.method && opts.method!=="GET" ? "return=representation" : ""),
+  };
+  const res = await fetch(url, { method: opts?.method||"GET", headers, body: opts?.body });
+  if(!res.ok) throw new Error("supaFetch error: " + res.status);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 // ── Fonctions de tri globales ──────────────────────────────
 function sortByDate(arr, field, asc) {
   field = field || 'date';
@@ -1005,22 +1022,17 @@ function doLogin(){
     return;
   }
 
-  // Charger depuis Supabase si cache vide, puis réessayer
+  // Si cache vide, charger users depuis Supabase
   if(!DB.users||!DB.users.length){
-    const _savedPin = lsPinEntry;
-    const _savedLogin = loginVal;
-    loadDBFromSupabase().then(freshDB=>{
-      if(freshDB&&freshDB.users&&freshDB.users.length){
-        DB=freshDB;
-        lsPinEntry=_savedPin;
-        document.getElementById("ls-login-inp").value=_savedLogin;
-        doLogin();
-      } else {
-        if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}
-      }
-    }).catch(()=>{
-      if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}
-    });
+    const _p=lsPinEntry, _l=loginVal;
+    if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Connexion...";}
+    supaFetch("users?select=*").then(rows=>{
+      if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
+      lsPinEntry=_p;
+      document.getElementById("ls-login-inp").value=_l;
+      if(errEl) errEl.textContent="";
+      doLogin();
+    }).catch(()=>{if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}});
     return;
   }
 
