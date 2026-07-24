@@ -272,7 +272,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
     </div>
     <div class="ls-card" style="position:relative;cursor:pointer" onclick="openLoginModal()">
       <span class="ls-card-ico">🩺</span>
-      <div class="ls-card-name">Médecin référent</div>
+      <div class="ls-card-name">Médecin</div>
       <span style="position:absolute;top:10px;right:10px;font-size:16px">🔒</span>
     </div>
     <div class="ls-card" style="position:relative;cursor:pointer" onclick="openLoginModal()">
@@ -1953,8 +1953,8 @@ function rDashboard(){
   }).sort((a,b)=>{
     const da = new Date(now.getFullYear(), months[a.mo]||0, parseInt(a.day)||1);
     const db2 = new Date(now.getFullYear(), months[b.mo]||0, parseInt(b.day)||1);
-    if(da-db2 !== 0) return da-db2;
-    return (a.h||"").localeCompare(b.h||"");
+    if(da-db2 !== 0) return db2-da;
+    return (b.h||"").localeCompare(a.h||"");
   });
   const upcomingRdv=weekRdv.map(r=>{const p=DB.patients.find(x=>x.id===r.patientId);const drU=DB.users.find(x=>x.id===r.dr);return `<div class="ur" style="cursor:pointer" onclick="openDossier('${r.patientId}')"><div style="width:44px;height:44px;border-radius:8px;background:${r.c};display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;flex-shrink:0"><div style="font-size:16px;font-weight:900;line-height:1">${r.day}</div><div style="font-size:9px;opacity:.8">${r.mo}</div></div><div style="flex:1"><div class="ur-name">${p?p.prenom+" "+p.nom:"—"}</div><div class="ur-meta">${r.h} · ${r.spec}</div></div>${r.s==="confirmé"?bdg("Confirmé","bgn"):bdg("À confirmer","ba")}</div>`;}).join("");
   const canCreate=["admin","medecin"].includes(u.role);
