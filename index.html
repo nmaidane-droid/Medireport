@@ -1008,11 +1008,14 @@ function doLogin(){
   // Si DB.users vide (cache vidé), charger depuis Supabase avant de vérifier
   if(!DB.users||!DB.users.length){
     if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Chargement...";}
+    const savedPin = lsPinEntry;
     supaFetch("users?select=*").then(rows=>{
       if(rows&&rows.length){
         DB.users=(rows||[]).map(u=>({...u,patientId:u.patient_id}));
         try{localStorage.setItem("medirecord_db",JSON.stringify(DB));}catch(e){}
       }
+      lsPinEntry = savedPin;
+      if(errEl) errEl.textContent="";
       doLogin();
     }).catch(()=>{ if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";} });
     return;
