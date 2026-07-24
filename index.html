@@ -4422,7 +4422,7 @@ function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><spa
 
 function rAgenda(){
   const u=currentUser;
-  const months2idx = {Jan:0,Fév:1,Mar:2,Avr:3,Mai:4,Jun:5,Jul:6,Aoû:7,Sep:8,Oct:9,Nov:10,Déc:11};
+  const months2idx = {Jan:0,Janv:0,Fév:1,Fevr:1,Mar:2,Mars:2,Avr:3,Avri:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Aout:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11,Dec:11};
   const rdvBase = u.role==="admin" ? DB.rdv : DB.rdv.filter(r=>r.dr===u.id);
   const myRdv = rdvBase.slice().sort((a,b)=>{
     const da = new Date(new Date().getFullYear(), months2idx[a.mo]||0, parseInt(a.day)||1);
