@@ -1048,11 +1048,7 @@ function doLogin(){
         lsPinEntry="";
         currentUser = _ADMIN_USER;
         if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Chargement des données…";}
-        const dbTimeout = new Promise(res=>setTimeout(()=>res(DB), 4000));
-        Promise.race([loadDBFromSupabase(), dbTimeout]).then(freshDB=>{
-          if(freshDB) DB=freshDB;
-          renderPage();
-        }).catch(()=>{ renderPage(); });
+        renderPage();
       } else {
         if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
         for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
