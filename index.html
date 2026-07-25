@@ -1272,21 +1272,7 @@ function buildSidebar(){
     nav.appendChild(d);
   });
 
-  // Reset DB — only for admin
-  if(u.role === "admin"){
-    const resetDiv = document.createElement("div");
-    resetDiv.className = "ni";
-    resetDiv.style.cssText = "padding:10px 14px;color:var(--red);font-weight:700";
-    resetDiv.innerHTML = '<span class="ni-ico">🗑</span>Réinitialiser la base';
-    resetDiv.addEventListener("click", ()=>{
-      if(confirm("Réinitialiser TOUTES les données ? Cette action est irréversible.")){
-        localStorage.removeItem("medirecord_db");
-        
-        location.reload();
-      }
-    });
-    nav.appendChild(resetDiv);
-  }
+
 
   // Déconnexion — nav item avec double espacement
   const sepDiv = document.createElement("div");
@@ -4646,19 +4632,19 @@ function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.f
 
 function rAccesMobile(filterMois, filterDr, filterStatut) {
   // Récupérer tous les accès mobiles depuis Supabase
-  supaFetch("patient_access?type=eq.acces_mobile&select=*").then(rows => {
-    if (!rows) rows = [];
+  // Construire la liste depuis DB.users (role=patient) + DB.access (type=acces_mobile)
+  const rows = DB.access.filter(a => a.type === "acces_mobile");
 
     // Enrichir avec données patient et médecin
     const acces = rows.map(r => {
-      const pat = DB.patients.find(p => p.id === r.patient_id) || {};
-      const dr = DB.users.find(u => u.id === r.active_par) || {};
+      const pat = DB.patients.find(p => p.id === (r.patientId||r.patient_id)) || {};
+      const dr = DB.users.find(u => u.id === (r.active_par||r.userId)) || {};
       return Object.assign({}, r, {
-        patNom: pat.prenom + " " + pat.nom,
+        patNom: (pat.prenom||"") + " " + (pat.nom||""),
         patPath: (pat.pathologies||[]).join(", ") || "—",
-        drNom: (dr.titre ? dr.titre + " " : "") + dr.prenom + " " + dr.nom,
+        drNom: (dr.titre ? dr.titre + " " : "") + (dr.prenom||"") + " " + (dr.nom||""),
         drSpec: dr.spec || "",
-        drId: r.active_par
+        drId: r.active_par || r.userId
       });
     });
 
@@ -4773,7 +4759,6 @@ function rAccesMobile(filterMois, filterDr, filterStatut) {
 
     html += `</div>`;
     G("pg-admin").innerHTML = `<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="rAdmin()">← Administration</button></div>` + html;
-  });
 }
 
 async function toggleFacture(accessId, checked, filterMois, filterDr, filterStatut) {
@@ -4879,7 +4864,7 @@ function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="
   </div>
   <div style="margin-top:10px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
 </div>
-<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div><button class="btn bd" style="width:100%;justify-content:center;margin-bottom:10px" onclick="if(confirm('Réinitialiser TOUTES les données ?')){localStorage.removeItem('medirecord_db');location.reload();}">🗑 Réinitialiser la base de données</button><div style="font-size:11px;color:var(--g400)">Supprime toutes les données et restaure la démo.</div></div></div></div>`;}
+<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div></div></div></div>`;}
 
 function showAddPatient(){
   // ── Étape 1 : Recherche doublon avant création ────────────
