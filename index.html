@@ -4632,21 +4632,27 @@ function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.f
 
 function rAccesMobile(filterMois, filterDr, filterStatut) {
   // Récupérer tous les accès mobiles depuis Supabase
-  // Construire la liste depuis DB.users (role=patient) + DB.access (type=acces_mobile)
-  const rows = DB.access.filter(a => a.type === "acces_mobile");
+  // Construire la liste depuis DB.users (role=patient)
+  const patientUsers = DB.users.filter(u => u.role === "patient");
+  const accessRows = DB.access.filter(a => a.type === "acces_mobile");
 
-    // Enrichir avec données patient et médecin
-    const acces = rows.map(r => {
-      const pat = DB.patients.find(p => p.id === (r.patientId||r.patient_id)) || {};
-      const dr = DB.users.find(u => u.id === (r.active_par||r.userId)) || {};
-      return Object.assign({}, r, {
-        patNom: (pat.prenom||"") + " " + (pat.nom||""),
-        patPath: (pat.pathologies||[]).join(", ") || "—",
-        drNom: (dr.titre ? dr.titre + " " : "") + (dr.prenom||"") + " " + (dr.nom||""),
-        drSpec: dr.spec || "",
-        drId: r.active_par || r.userId
-      });
-    });
+  const acces = patientUsers.map(pu => {
+    const pat = DB.patients.find(p => p.id === pu.patientId) || {};
+    const accLog = accessRows.find(a => a.patientId === pu.patientId) || {};
+    const dr = DB.users.find(u => u.id === accLog.active_par) || {};
+    return {
+      id: accLog.id || pu.id,
+      patientId: pu.patientId,
+      patNom: (pat.prenom||"") + " " + (pat.nom||""),
+      patPath: (pat.pathologies||[]).join(", ") || "—",
+      drNom: dr.id ? ((dr.titre ? dr.titre + " " : "") + (dr.prenom||"") + " " + (dr.nom||"")) : "—",
+      drSpec: dr.spec || "",
+      drId: dr.id || "",
+      date_activation: accLog.date_activation || accLog.date || "—",
+      facture: accLog.facture || false,
+      facture_date: accLog.facture_date || null
+    };
+  });
 
     // Filtres
     const moisList = [...new Set(acces.map(a => a.date_activation ? a.date_activation.substring(3) : ""))].filter(Boolean).sort().reverse();
