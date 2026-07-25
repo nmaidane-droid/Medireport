@@ -4637,17 +4637,37 @@ function rAcces(){const patients=DB.patients;const profs=DB.users.filter(u=>!["p
 function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);rAcces();}
 
 function rAccesMobile(filterMois, filterDr, filterStatut) {
-  // Récupérer tous les accès mobiles depuis Supabase
-  supaFetch("patient_access?type=eq.acces_mobile&select=*").then(rows => {
-    if (!rows) rows = [];
+  // Source : DB.users role=patient + DB.access type=acces_mobile
+  const patientUsers = DB.users.filter(u => u.role === "patient");
+  const accessRows = DB.access.filter(a => a.type === "acces_mobile");
 
-    // Enrichir avec données patient et médecin
+  const rows = patientUsers.map(pu => {
+    const pat = DB.patients.find(p => p.id === pu.patientId) || {};
+    const accLog = accessRows.find(a => a.patientId === pu.patientId) || {};
+    const dr = DB.users.find(u => u.id === accLog.active_par) || {};
+    return {
+      id: accLog.id || pu.id,
+      patient_id: pu.patientId,
+      patNom: (pat.prenom||"") + " " + (pat.nom||""),
+      patPath: (pat.pathologies||[]).join(", ") || "—",
+      active_par: dr.id || "",
+      drNom: dr.id ? ((dr.titre?dr.titre+" ":"")+(dr.prenom||"")+" "+(dr.nom||"")) : "—",
+      drSpec: dr.spec || "",
+      drId: dr.id || "",
+      date_activation: accLog.date_activation || accLog.date || "—",
+      facture: accLog.facture || false,
+      facture_date: accLog.facture_date || null
+    };
+  });
+
+  {
+    // Enrichir avec données patient et médecin (déjà fait)
     const acces = rows.map(r => {
       const pat = DB.patients.find(p => p.id === r.patient_id) || {};
       const dr = DB.users.find(u => u.id === r.active_par) || {};
       return Object.assign({}, r, {
-        patNom: pat.prenom + " " + pat.nom,
-        patPath: (pat.pathologies||[]).join(", ") || "—",
+        patNom: r.patNom || (pat.prenom + " " + pat.nom),
+        patPath: r.patPath || ((pat.pathologies||[]).join(", ") || "—"),
         drNom: (dr.titre ? dr.titre + " " : "") + dr.prenom + " " + dr.nom,
         drSpec: dr.spec || "",
         drId: r.active_par
@@ -4764,8 +4784,8 @@ function rAccesMobile(filterMois, filterDr, filterStatut) {
     }
 
     html += `</div>`;
-    G("pg-admin").innerHTML = `<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="rAdmin()">← Administration</button></div>` + html;
-  });
+    G("pg-admin-mobile").innerHTML = html;
+  }
 }
 
 async function toggleFacture(accessId, checked, filterMois, filterDr, filterStatut) {
@@ -4912,18 +4932,17 @@ function rAdminUsers(search){
 }
 
 function rAdminBackup(){
-  const lastB = localStorage.getItem("medirecord_last_backup");
-  const lastBDate = lastB ? new Date(lastB).toLocaleDateString("fr-FR") : "Jamais";
   G("pg-admin-backup").innerHTML=`
     <div class="sec-hd"><div><div class="sec-tit">💾 Sauvegarde & Restauration</div></div></div>
     <div class="card">
-      <div style="font-size:13px;color:var(--g500);margin-bottom:16px">Dernière sauvegarde : <strong>${lastBDate}</strong></div>
+      <div id="backup-status" style="margin-bottom:16px"><div style="padding:12px;border-radius:8px;background:var(--g50);color:var(--g400);font-size:13px">⏳ Vérification du dernier backup...</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <button class="btn bp" style="justify-content:center;padding:14px" onclick="backupDB()">💾 Exporter backup JSON</button>
-        <button class="btn bs" style="justify-content:center;padding:14px" onclick="restoreDB()">📂 Restaurer depuis fichier</button>
+        <button class="btn bp" style="justify-content:center;padding:14px" onclick="backupDB()">💾 Sauvegarder</button>
+        <button class="btn bs" style="justify-content:center;padding:14px" onclick="restoreDB()">☁️ Restaurer depuis cloud</button>
       </div>
-      <div style="font-size:11px;color:var(--g400)">⚠ La restauration remplace toutes les données actuelles. Faites un backup avant.</div>
+      <div style="font-size:11px;color:var(--g400)">⚠ La restauration remplace toutes les données actuelles.</div>
     </div>`;
+  updateBackupStatus();
 }
 
 function rAdminCNDP(){
@@ -6048,66 +6067,83 @@ function showAccessLog(filterDays){
 // ══════════════════════════════════════════════════════════
 //  SYSTÈME DE BACKUP
 // ══════════════════════════════════════════════════════════
-function backupDB(){
-  const backup = {
-    version: "3.0",
-    date: today(),
-    timestamp: new Date().toISOString(),
-    data: DB
-  };
-  const json = JSON.stringify(backup, null, 2);
-  const blob = new Blob([json], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "medirecord-backup-"+today().replace(/\//g,"-")+".json";
-  a.click();
-  URL.revokeObjectURL(url);
-  // Store last backup date
-  localStorage.setItem("medirecord_last_backup", new Date().toISOString());
-  if(!DB.logs) DB.logs=[];
-  DB.logs.push({
-    type:"backup",
-    date: today(),
-    heure: new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
-    medecin: currentUser?.id||"admin",
-    patient:"—",
-    action:"Backup exporté",
-    timestamp: new Date().toISOString()
-  });
-  saveDB(DB);
-  alert("✅ Backup exporté avec succès.\nConservez ce fichier en lieu sûr (clé USB, cloud...).");
+async function backupDB(){
+  const btn = document.querySelector("[onclick='backupDB()']");
+  if(btn){ btn.disabled=true; btn.textContent="⏳ Sauvegarde..."; }
+  try {
+    const backup = {
+      id: "backup-"+Date.now(),
+      version: "3.0",
+      label: today()+" "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
+      created_by: currentUser?.id||"admin",
+      data: DB
+    };
+    const res = await supaFetch("backups", {
+      method: "POST",
+      body: JSON.stringify({
+        id: backup.id,
+        version: backup.version,
+        label: backup.label,
+        created_by: backup.created_by,
+        data: backup.data
+      })
+    });
+    localStorage.setItem("medirecord_last_backup", new Date().toISOString());
+    if(!DB.logs) DB.logs=[];
+    DB.logs.push({type:"backup",date:today(),heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),medecin:currentUser?.id||"admin",patient:"—",action:"Backup Supabase",timestamp:new Date().toISOString()});
+    saveDB(DB);
+    updateBackupStatus();
+    alert("✅ Backup sauvegardé dans Supabase.");
+  } catch(err){
+    alert("❌ Erreur de sauvegarde : "+err.message);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent="💾 Sauvegarder"; }
+  }
 }
 
-function restoreDB(){
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".json";
-  input.onchange = (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      try {
-        const backup = JSON.parse(ev.target.result);
-        if(!backup.data || !backup.data.patients){
-          alert("❌ Fichier invalide — ce n'est pas un backup MediReport Pro.");
-          return;
-        }
-        if(!confirm(`Restaurer le backup du ${backup.date} ?\n\nCela remplacera TOUTES les données actuelles.\n\nContinuer ?`)) return;
-        // Restore
-        localStorage.setItem("medirecord_db", JSON.stringify(backup.data));
-        // version ignorée
-        localStorage.setItem("medirecord_last_backup", new Date().toISOString());
-        alert("✅ Backup restauré avec succès. L'application va se recharger.");
-        location.reload();
-      } catch(err){
-        alert("❌ Erreur de lecture du fichier backup.");
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
+async function restoreDB(){
+  if(!confirm("Restaurer le dernier backup depuis Supabase ?\nCela remplacera TOUTES les données actuelles.")) return;
+  try {
+    const rows = await supaFetch("backups?order=created_at.desc&limit=1&select=*");
+    if(!rows||!rows.length){ alert("❌ Aucun backup trouvé dans Supabase."); return; }
+    const backup = rows[0];
+    if(!confirm(`Restaurer le backup du ${backup.label} ?`)) return;
+    DB = backup.data;
+    localStorage.setItem("medirecord_db", JSON.stringify(DB));
+    localStorage.setItem("medirecord_last_backup", new Date().toISOString());
+    alert("✅ Backup restauré. L'application va se recharger.");
+    location.reload();
+  } catch(err){
+    alert("❌ Erreur de restauration : "+err.message);
+  }
+}
+
+async function updateBackupStatus(){
+  const el = document.getElementById("backup-status");
+  if(!el) return;
+  try {
+    const rows = await supaFetch("backups?order=created_at.desc&limit=1&select=id,created_at,label");
+    if(!rows||!rows.length){
+      el.innerHTML=`<div style="padding:12px;border-radius:8px;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700">⚠️ Aucun backup enregistré</div>`;
+      return;
+    }
+    const last = rows[0];
+    const lastDate = new Date(last.created_at);
+    const now = new Date();
+    const diffDays = Math.floor((now - lastDate)/(1000*60*60*24));
+    const isToday = diffDays === 0;
+    const isRecent = diffDays <= 3;
+    const color = isToday ? "#16A34A" : isRecent ? "#D97706" : "#DC2626";
+    const bg = isToday ? "#F0FDF4" : isRecent ? "#FFFBEB" : "#FEF2F2";
+    const border = isToday ? "#BBF7D0" : isRecent ? "#FDE68A" : "#FECACA";
+    const label = isToday ? "✅ Backup du jour" : isRecent ? `⚠️ Backup il y a ${diffDays} jour(s)` : `🔴 Backup il y a ${diffDays} jour(s) — Action requise`;
+    el.innerHTML=`<div style="padding:12px 16px;border-radius:8px;background:${bg};border:1.5px solid ${border};color:${color};font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center">
+      <span>${label}</span>
+      <span style="font-size:11px;font-weight:500;opacity:.8">${last.label||lastDate.toLocaleDateString("fr-FR")}</span>
+    </div>`;
+  } catch(e){
+    el.innerHTML=`<div style="padding:12px;border-radius:8px;background:#FEF2F2;color:#DC2626;font-size:13px">❌ Impossible de vérifier le backup</div>`;
+  }
 }
 
 function checkBackupReminder(){
