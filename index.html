@@ -1048,10 +1048,11 @@ function doLogin(){
         lsPinEntry="";
         currentUser = _ADMIN_USER;
         if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Chargement des données…";}
-        loadDBFromSupabase().then(freshDB=>{
-          DB=freshDB;
-          loadSeenSupabase(_ADMIN_USER.id).then(()=>{ renderPage(); });
-        }).catch(()=>{ DB=DB||{users:[],patients:[],consultations:{},labos:{},rx:{},imagerie:{},rdv:[],access:[],demandes_labo:[],demandes_avis:[]}; renderPage(); });
+        const dbTimeout = new Promise(res=>setTimeout(()=>res(DB), 5000));
+        Promise.race([loadDBFromSupabase(), dbTimeout]).then(freshDB=>{
+          if(freshDB) DB=freshDB;
+          loadSeenSupabase(_ADMIN_USER.id).then(()=>{ renderPage(); }).catch(()=>{ renderPage(); });
+        });
       } else {
         if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
         for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
