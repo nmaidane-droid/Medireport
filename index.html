@@ -1027,20 +1027,6 @@ function doLogin(){
     return;
   }
 
-  // Si cache vide, charger users depuis Supabase
-  if(!DB.users||!DB.users.length){
-    const _p=lsPinEntry, _l=loginVal;
-    if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Connexion...";}
-    supaFetch("users?select=*").then(rows=>{
-      if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
-      lsPinEntry=_p;
-      document.getElementById("ls-login-inp").value=_l;
-      if(errEl) errEl.textContent="";
-      doLogin();
-    }).catch(()=>{if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}});
-    return;
-  }
-
   // ── Vérification admin hardcodé en priorité ──
   if(loginVal === _ADMIN_LOGIN){
     _hashPin(lsPinEntry).then(hash=>{
