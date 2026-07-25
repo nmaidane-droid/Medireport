@@ -4624,7 +4624,7 @@ function showAddUser(){
   const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Nouvel utilisateur</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Titre</label><select id="nu-ti"><option value="">Dr.</option><option value="Pr">Pr</option><option value="M.">M.</option><option value="Mme">Mme</option></select></div><div class="fg"><label>Rôle</label><select id="nu-rl">${roleOpts}</select></div></div><div class="fr"><div class="fg"><label>Prénom</label><input id="nu-pr" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="nu-nm" placeholder="Nom"/></div></div><div class="fg"><label>Spécialité</label><select id="nu-sp"><option value="">— Sélectionner —</option>${specOptions()}</select></div><div class="fg"><label>Structure / Établissement</label><input id="nu-st" placeholder="Clinique, Cabinet, Labo..."/></div><div class="fg"><label>Adresse complète</label><input id="nu-adr" placeholder="Ex : 12 Rue Ibn Batouta, Casablanca"/></div><div class="fg"><label>Téléphone professionnel</label><input id="nu-tel" placeholder="Ex : +212 5 22 00 00 00"/></div><div class="fg"><label>Code PIN généré automatiquement</label>
   <div style="background:#0F172A;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
     <span id="nu-pin-disp" style="font-size:28px;font-weight:900;color:#fff;background:#000;font-family:monospace;letter-spacing:8px;padding:8px 16px;border-radius:8px;display:inline-block;min-width:140px;text-align:center"></span>
-    <button type="button" class="btn bp bsm" onclick="const p=generatePIN();document.getElementById('nu-pin').value=p;document.getElementById('nu-pin-disp').textContent=p;" style="white-space:nowrap">🎲</button>
+    <button type="button" class="btn bs bsm" onclick="const p=generatePIN();document.getElementById('nu-pin').value=p;document.getElementById('nu-pin-disp').textContent=p;" style="white-space:nowrap;background:#fff;border:1.5px solid var(--g200)">🎲</button>
   </div>
   <input id="nu-pin" type="hidden"/>
   <div style="font-size:11px;color:var(--g400);margin-top:6px">⚠️ Notez ce PIN — il sera affiché sur la fiche patient imprimable</div>
@@ -4646,7 +4646,7 @@ function showEditUser(uid2){
   <div class="fg"><label>PIN (6 chiffres)</label>
   <div style="display:flex;gap:8px;align-items:center">
     <input id="eu-pin" type="text" maxlength="6" value="${u.pin||''}" style="letter-spacing:8px;font-size:18px;text-align:center;flex:1"/>
-    <button type="button" class="btn bs bsm" onclick="const p=generatePIN();document.getElementById('eu-pin').value=p;document.getElementById('eu-pin-disp').textContent='Nouveau PIN : '+p;" style="white-space:nowrap">🎲 Régénérer</button>
+    <button type="button" class="btn bs bsm" onclick="const p=generatePIN();document.getElementById('eu-pin').value=p;document.getElementById('eu-pin-disp').textContent='Nouveau PIN : '+p;" style="white-space:nowrap;background:#fff;border:1.5px solid var(--g200)">🎲 Régénérer</button>
   </div>
   <div id="eu-pin-disp" style="font-size:20px;font-weight:900;font-family:monospace;letter-spacing:8px;color:#fff;background:#000;padding:8px 16px;border-radius:8px;margin-top:6px;display:inline-block;min-width:140px;text-align:center"></div>
   <div style="font-size:11px;color:var(--g400);margin-top:3px">Communiquez le nouveau PIN à l'utilisateur</div>
