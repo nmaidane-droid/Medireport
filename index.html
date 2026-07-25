@@ -537,12 +537,6 @@ function isSeen(userId, itemId, itemType) {
 const _SB_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
 const _SB_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
 
-// ── Admin hardcodé (indépendant de Supabase) ─────────────
-const _ADMIN_LOGIN = "admin";
-const _ADMIN_PIN_HASH = "c27930584abbf709a1858e7e75ec8e0e579cffd2d56c36142f15190a4df3a4c2";
-const _ADMIN_USER = {id:"u_admin",prenom:"Administrateur",nom:"",role:"admin",login:"admin",initials:"AD",color:"#1A6EFF",pin:null};
-async function _hashPin(pin){ const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin)); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join(""); }
-
 async function supaFetch(path, opts){
   const url = _SB_URL + "/rest/v1/" + path;
   const headers = {
@@ -1027,26 +1021,17 @@ function doLogin(){
     return;
   }
 
-  // ── Vérification admin hardcodé en priorité ──
-  if(loginVal === _ADMIN_LOGIN){
-    _hashPin(lsPinEntry).then(hash=>{
-      if(hash === _ADMIN_PIN_HASH){
-        lsPinEntry="";
-        currentUser = _ADMIN_USER;
-        G("ls").classList.remove("on"); G("ls").style.display="none";
-        G("ms").classList.add("on"); G("ms").style.display="flex";
-        closeLoginModal();
-        currentPage = ROLE_CFG[_ADMIN_USER.role].nav[0];
-        resetSessionTimer();
-        buildSidebar();
-        renderPage();
-        startRealtimePro();
-      } else {
-        if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
-        for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
-        setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
-      }
-    });
+  // Si cache vide, charger users depuis Supabase
+  if(!DB.users||!DB.users.length){
+    const _p=lsPinEntry, _l=loginVal;
+    if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Connexion...";}
+    supaFetch("users?select=*").then(rows=>{
+      if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
+      lsPinEntry=_p;
+      document.getElementById("ls-login-inp").value=_l;
+      if(errEl) errEl.textContent="";
+      doLogin();
+    }).catch(()=>{if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}});
     return;
   }
 
@@ -1272,7 +1257,21 @@ function buildSidebar(){
     nav.appendChild(d);
   });
 
-
+  // Reset DB — only for admin
+  if(u.role === "admin"){
+    const resetDiv = document.createElement("div");
+    resetDiv.className = "ni";
+    resetDiv.style.cssText = "padding:10px 14px;color:var(--red);font-weight:700";
+    resetDiv.innerHTML = '<span class="ni-ico">🗑</span>Réinitialiser la base';
+    resetDiv.addEventListener("click", ()=>{
+      if(confirm("Réinitialiser TOUTES les données ? Cette action est irréversible.")){
+        localStorage.removeItem("medirecord_db");
+        
+        location.reload();
+      }
+    });
+    nav.appendChild(resetDiv);
+  }
 
   // Déconnexion — nav item avec double espacement
   const sepDiv = document.createElement("div");
@@ -1322,7 +1321,7 @@ async function ocrLaboPDF(input, demandeId){
     const isPDF = file.type === "application/pdf";
     const mediaType = isPDF ? "application/pdf" : (file.type || "image/jpeg");
 
-    const response = await fetch("/api/claude",{
+    const response = await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -1576,24 +1575,6 @@ function goBack(){
   const nav=ROLE_CFG[currentUser.role].nav;
   const first=nav[0];
   goPage(first);
-}
-
-function showMesPatients(){
-  const u = currentUser;
-  const mesPatients = DB.patients.filter(p=>p.medecin_ref===u.id);
-  const html = mesPatients.map(p=>`
-    <div class="card" style="cursor:pointer;margin-bottom:10px" onclick="this.closest('.mov').remove();openDossier('${p.id}')">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="av" style="background:${p.color}">${p.initials}</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:800;color:var(--g900)">${p.prenom} ${p.nom}</div>
-          <div style="font-size:12px;color:var(--g500);margin-top:2px">${p.age} ans · ${p.ville||"—"} · ${(p.pathologies||[]).join(", ")||"—"}</div>
-        </div>
-        ${p.allergies?.length?`<span class="badge br" title="Allergie documentée">⚠</span>`:""}
-        ${p.dialyse?`<span class="badge bt" title="Patient en hémodialyse">💧</span>`:""}
-      </div>
-    </div>`).join("");
-  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Mes patients (${mesPatients.length})</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">${html||'<div style="text-align:center;padding:30px;color:var(--g400)">Aucun patient créé</div>'}</div></div>`);
 }
 
 function goPage(id){
@@ -1970,7 +1951,7 @@ function rDashboard(){
     const myDemAvis = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="en_attente");
     const myDemAvisDone = (DB.demandes_avis||[]).filter(d=>d.specialiste===u.id&&d.statut==="traite");
     statsHtml=`<div class="g4" style="margin-bottom:20px">
-      <div class="stat"><div class="sl">Patients</div><div class="sv">${DB.patients.filter(p=>p.medecin_ref===u.id).length} / ${DB.patients.length}</div><div class="ss">propres / réseau</div></div>
+      <div class="stat"><div class="sl">Propres patients</div><div class="sv">${patients.filter(p=>p.medecin_ref===u.id).length}</div><div class="ss">${DB.patients.length} patients au total</div></div>
       <div class="stat"><div class="sl">RDV confirmés</div><div class="sv">${myRdv.filter(r=>r.s==="confirmé").length}</div></div>
       <div class="stat" style="${myDemAvis.length?'border-color:var(--amber)':''}"><div class="sl">Avis en attente</div><div class="sv" style="color:${myDemAvis.length?'var(--amber)':'var(--g900)'}">${myDemAvis.length}</div><div class="ss">Demandes reçues</div></div>
       <div class="stat"><div class="sl">Avis traités</div><div class="sv">${myDemAvisDone.length}</div><div class="ss">Comptes rendus envoyés</div></div>
@@ -2066,7 +2047,7 @@ function rDashboard(){
     </div>`:''}
   ` : "";
 
-  G("pg-dashboard").innerHTML=`${statsHtml}${returnsHtml}<div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div><div style="display:flex;gap:8px">${canCreate?`<button class="btn bs bsm" onclick="showAddPatient()">+ Nouveau</button>`:""}${u.role!=="patient"?`<button class="btn bp bsm" onclick="goPage('patients')">Voir tous →</button><button class="btn bs bsm" onclick="showMesPatients()">👤 Mes patients</button>`:""}</div></div>${recentHtml||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun patient</div>`}</div><div class="card"><div class="ch"><div class="ctit"><span class="ci">📅</span> RDV de la semaine</div></div>${upcomingRdv||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun RDV cette semaine</div>`}</div></div>`;
+  G("pg-dashboard").innerHTML=`${statsHtml}${returnsHtml}<div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div><div style="display:flex;gap:8px">${canCreate?`<button class="btn bs bsm" onclick="showAddPatient()">+ Nouveau</button>`:""}${u.role!=="patient"?`<button class="btn bp bsm" onclick="goPage('patients')">Voir tous →</button>`:""}</div></div>${recentHtml||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun patient</div>`}</div><div class="card"><div class="ch"><div class="ctit"><span class="ci">📅</span> RDV de la semaine</div></div>${upcomingRdv||`<div style="text-align:center;padding:20px;color:var(--g400);font-size:13px">Aucun RDV cette semaine</div>`}</div></div>`;
 }
 
 function rPatients(){
@@ -2999,7 +2980,7 @@ async function handleOcrFile(input, pid){
     const mediaType = isImage ? file.type : 'application/pdf';
     
     // Call Claude API
-    const response = await fetch('/api/claude', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4148,7 +4129,7 @@ async function ocrImagerieDoc(input){
     const isPDF = file.type==="application/pdf";
     const mediaType = isPDF?"application/pdf":(file.type||"image/jpeg");
 
-    const response = await fetch("/api/claude",{
+    const response = await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -4587,8 +4568,7 @@ function showAddRdvFromAgenda(){
 }
 
 function rUsers(){
-  const rows=DB.users.map(u=>{const rc=ROLE_CFG[u.role];const titre=u.titre?u.titre+" ":"";return `<tr><td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.prenom} ${u.nom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td><td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td><td style="font-size:13px">${u.structure||"—"}</td><td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"0000"}</span></td><td><div class="tbl-act">${u.role==="patient"?`<button class="btn bp bsm" onclick="printFicheAcces('${u.id}')" title="Fiche d'accès patient">🖨️</button>`:""}<button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td></tr>`;}).join("");
-  G("pg-users").innerHTML=`${backBtn()}<div class="sec-hd"><div><div class="sec-tit">Utilisateurs (${DB.users.length})</div></div><button class="btn bp" onclick="showAddUser()">+ Nouvel utilisateur</button></div><div style="margin-bottom:12px;padding:10px 14px;background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r);font-size:12px;color:#92400E">🔒 Les PINs sont visibles uniquement par l'administrateur. Communiquez-les aux utilisateurs en privé.</div><div class="card"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>Structure</th><th>PIN</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  goPage("admin");
 }
 
 function showAddUser(){
@@ -4632,27 +4612,21 @@ function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.f
 
 function rAccesMobile(filterMois, filterDr, filterStatut) {
   // Récupérer tous les accès mobiles depuis Supabase
-  // Construire la liste depuis DB.users (role=patient)
-  const patientUsers = DB.users.filter(u => u.role === "patient");
-  const accessRows = DB.access.filter(a => a.type === "acces_mobile");
+  supaFetch("patient_access?type=eq.acces_mobile&select=*").then(rows => {
+    if (!rows) rows = [];
 
-  const acces = patientUsers.map(pu => {
-    const pat = DB.patients.find(p => p.id === pu.patientId) || {};
-    const accLog = accessRows.find(a => a.patientId === pu.patientId) || {};
-    const dr = DB.users.find(u => u.id === accLog.active_par) || {};
-    return {
-      id: accLog.id || pu.id,
-      patientId: pu.patientId,
-      patNom: (pat.prenom||"") + " " + (pat.nom||""),
-      patPath: (pat.pathologies||[]).join(", ") || "—",
-      drNom: dr.id ? ((dr.titre ? dr.titre + " " : "") + (dr.prenom||"") + " " + (dr.nom||"")) : "—",
-      drSpec: dr.spec || "",
-      drId: dr.id || "",
-      date_activation: accLog.date_activation || accLog.date || "—",
-      facture: accLog.facture || false,
-      facture_date: accLog.facture_date || null
-    };
-  });
+    // Enrichir avec données patient et médecin
+    const acces = rows.map(r => {
+      const pat = DB.patients.find(p => p.id === r.patient_id) || {};
+      const dr = DB.users.find(u => u.id === r.active_par) || {};
+      return Object.assign({}, r, {
+        patNom: pat.prenom + " " + pat.nom,
+        patPath: (pat.pathologies||[]).join(", ") || "—",
+        drNom: (dr.titre ? dr.titre + " " : "") + dr.prenom + " " + dr.nom,
+        drSpec: dr.spec || "",
+        drId: r.active_par
+      });
+    });
 
     // Filtres
     const moisList = [...new Set(acces.map(a => a.date_activation ? a.date_activation.substring(3) : ""))].filter(Boolean).sort().reverse();
@@ -4765,6 +4739,7 @@ function rAccesMobile(filterMois, filterDr, filterStatut) {
 
     html += `</div>`;
     G("pg-admin").innerHTML = `<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="rAdmin()">← Administration</button></div>` + html;
+  });
 }
 
 async function toggleFacture(accessId, checked, filterMois, filterDr, filterStatut) {
@@ -4850,27 +4825,156 @@ function printRecapAcces(drId, mois) {
   });
 }
 
-function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Administration</div></div></div><div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div>${bdg(DB.patients.length+" patients","bb")}</div>${DB.patients.map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans · ${(p.pathologies||[]).join(", ")||"—"}</div></div><button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button></div>`).join("")}<div style="margin-top:12px"><button class="btn bp" style="width:100%" onclick="showAddPatient()">+ Nouveau patient</button></div></div><div><div class="card" style="margin-bottom:16px"><div class="ch"><div class="ctit"><span class="ci">👤</span> Utilisateurs par rôle</div></div>${Object.entries(ROLE_CFG).map(([k,v])=>{const count=DB.users.filter(u=>u.role===k).length;return `<div class="ur"><div style="width:34px;height:34px;border-radius:50%;background:${v.c}22;display:flex;align-items:center;justify-content:center;font-size:16px">${v.i}</div><div style="flex:1"><div class="ur-name">${v.l}</div></div>${bdg(count+" compte(s)","bgr")}</div>`;}).join("")}</div><div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">📱</span> Accès mobiles</div><button class="btn bp bsm" onclick="rAccesMobile()">Voir le tableau</button></div><div id="acces-mobile-preview"></div></div>
-<div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">💾</span> Sauvegarde & Restauration</div></div>
-  <div style="font-size:12px;color:var(--g500);margin-bottom:12px">
-    Dernière sauvegarde : <strong id="last-backup-date">—</strong>
+function rAdmin(){
+  const u = currentUser;
+  const totalUsers = DB.users.filter(u=>u.role!=="patient").length;
+  const medecins = DB.users.filter(u=>u.role==="medecin").length;
+  const specialistes = DB.users.filter(u=>u.role==="specialiste").length;
+  const labos = DB.users.filter(u=>u.role==="laboratoire").length;
+  const imageries = DB.users.filter(u=>u.role==="imagerie").length;
+  const totalPatients = DB.patients.length;
+  const totalConsultations = Object.values(DB.consultations||{}).reduce((s,a)=>s+a.length,0);
+  const totalRdv = (DB.rdv||[]).length;
+  const totalLabos = Object.values(DB.labos||{}).reduce((s,a)=>s+a.length,0);
+  const totalImg = Object.values(DB.imagerie||{}).reduce((s,a)=>s+a.length,0);
+  const totalRx = Object.values(DB.rx||{}).reduce((s,a)=>s+a.length,0);
+  const mobileUsers = DB.users.filter(u=>u.role==="patient").length;
+
+  G("pg-admin").innerHTML=`
+  <div class="sec-hd"><div><div class="sec-tit">Administration</div></div></div>
+
+  <!-- STATISTIQUES -->
+  <div class="sec-tit" style="margin-bottom:10px">📊 Statistiques</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:var(--blue)">${totalUsers}</div><div style="font-size:11px;color:var(--g400)">Utilisateurs</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#1A6EFF">${medecins}</div><div style="font-size:11px;color:var(--g400)">Médecins</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#E53935">${specialistes}</div><div style="font-size:11px;color:var(--g400)">Spécialistes</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#0BA896">${labos}</div><div style="font-size:11px;color:var(--g400)">Laboratoires</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#F59E0B">${imageries}</div><div style="font-size:11px;color:var(--g400)">Imageries</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#7C3AED">${mobileUsers}</div><div style="font-size:11px;color:var(--g400)">Accès mobiles</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#0F172A">${totalPatients}</div><div style="font-size:11px;color:var(--g400)">Patients</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#16A34A">${totalConsultations}</div><div style="font-size:11px;color:var(--g400)">Consultations</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#DC2626">${totalRdv}</div><div style="font-size:11px;color:var(--g400)">Rendez-vous</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#0BA896">${totalLabos}</div><div style="font-size:11px;color:var(--g400)">Bilans labo</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#F59E0B">${totalImg}</div><div style="font-size:11px;color:var(--g400)">Imageries</div></div>
+    <div class="card" style="text-align:center;padding:14px"><div style="font-size:26px;font-weight:900;color:#7C3AED">${totalRx}</div><div style="font-size:11px;color:var(--g400)">Prescriptions</div></div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-    <button class="btn bgn-btn" style="justify-content:center" onclick="backupDB()">💾 Exporter backup JSON</button>
-    <button class="btn bs" style="justify-content:center" onclick="restoreDB()">📂 Restaurer depuis fichier</button>
+
+  <!-- UTILISATEURS -->
+  <div class="sec-tit" style="margin-bottom:10px">👥 Utilisateurs</div>
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn bp bsm" onclick="showAddUser()">+ Nouvel utilisateur</button>
+    </div>
+    <div style="margin-bottom:12px"><input id="admin-user-search" placeholder="🔍 Rechercher un utilisateur..." oninput="filterAdminUsers(this.value)" style="width:100%;padding:10px 14px;border:1.5px solid var(--g200);border-radius:10px;font-size:13px"/></div>
+    <div style="margin-bottom:10px;padding:10px 14px;background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r);font-size:12px;color:#92400E">🔒 Les PINs sont visibles uniquement par l'administrateur. Communiquez-les aux utilisateurs en privé.</div>
+    <div id="admin-users-table">${buildAdminUsersTable("")}</div>
   </div>
-  <div style="font-size:11px;color:var(--g400)">⚠ La restauration remplace toutes les données actuelles. Faites un backup avant.</div>
-</div>
-<div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">🔒</span> Conformité CNDP</div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-    <button class="btn bs" style="justify-content:flex-start" onclick="showPrivacyPolicy()">📄 Politique de confidentialité</button>
-    <button class="btn bs" style="justify-content:flex-start" onclick="showAccessLog()">📋 Journal de traçabilité</button>
-    <button class="btn bs" style="justify-content:flex-start" onclick="showMentionsLegales()">⚖️ Mentions légales</button>
-    <button class="btn bd" style="justify-content:flex-start" onclick="showViolationProcedure()">🚨 Signaler une violation</button>
+
+  <!-- ACCES MOBILES -->
+  <div class="sec-tit" style="margin-bottom:10px">📱 Accès mobiles</div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="ch"><button class="btn bp bsm" onclick="rAccesMobile()">Voir le tableau complet</button></div>
   </div>
-  <div style="margin-top:10px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
-</div>
-<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div></div></div></div>`;}
+
+  <!-- SAUVEGARDE -->
+  <div class="sec-tit" style="margin-bottom:10px">💾 Sauvegarde & Restauration</div>
+  <div class="card" style="margin-bottom:20px">
+    <div style="font-size:12px;color:var(--g500);margin-bottom:12px">Dernière sauvegarde : <strong id="last-backup-date">—</strong></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="btn bp" style="justify-content:center" onclick="backupDB()">💾 Exporter backup JSON</button>
+      <button class="btn bs" style="justify-content:center" onclick="restoreDB()">📂 Restaurer depuis fichier</button>
+    </div>
+    <div style="font-size:11px;color:var(--g400)">⚠ La restauration remplace toutes les données actuelles. Faites un backup avant.</div>
+  </div>
+
+  <!-- CONFORMITE CNDP -->
+  <div class="sec-tit" style="margin-bottom:10px">🔒 Conformité CNDP</div>
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn bs" style="justify-content:flex-start" onclick="showAccessLog()">📋 Journal de traçabilité</button>
+      <button class="btn bs" style="justify-content:flex-start" onclick="showDroitsPatient()">👤 Droits d'accès patient</button>
+      <button class="btn bs" style="justify-content:flex-start" onclick="showEffacement()">🗑 Droit à l'effacement</button>
+      <button class="btn bs" style="justify-content:flex-start" onclick="showMentionsLegales()">⚖️ Mentions légales</button>
+      <button class="btn bd" style="justify-content:flex-start;grid-column:1/-1" onclick="showViolationProcedure()">🚨 Signaler une violation</button>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
+  </div>`;
+
+  // Restore last backup date
+  const lastB = localStorage.getItem("medirecord_last_backup");
+  const el = document.getElementById("last-backup-date");
+  if(el && lastB) el.textContent = new Date(lastB).toLocaleDateString("fr-FR");
+  else if(el) el.textContent = "Jamais";
+}
+
+function buildAdminUsersTable(search){
+  const q=(search||"").toLowerCase();
+  const sorted=[...DB.users].filter(u=>u.role!=="patient").sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom,"fr"));
+  const filtered=q?sorted.filter(u=>(u.prenom+" "+u.nom).toLowerCase().includes(q)||(u.spec||"").toLowerCase().includes(q)||(u.login||"").toLowerCase().includes(q)):sorted;
+  if(!filtered.length) return '<div style="text-align:center;padding:20px;color:var(--g400)">Aucun résultat</div>';
+  return `<table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>Login</th><th>PIN</th><th>Actions</th></tr></thead><tbody>${
+    filtered.map(u=>{
+      const rc=ROLE_CFG[u.role]||{i:"?",l:u.role,c:"#888"};
+      const titre=u.titre?u.titre+" ":"";
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.prenom} ${u.nom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td>
+        <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
+        <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
+        <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"—"}</span></td>
+        <td><div class="tbl-act">
+          <button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>
+          ${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}
+        </div></td>
+      </tr>`;
+    }).join("")
+  }</tbody></table>`;
+}
+
+function filterAdminUsers(search){
+  const el=document.getElementById("admin-users-table");
+  if(el) el.innerHTML=buildAdminUsersTable(search);
+}
+
+function showDroitsPatient(){
+  const rows=DB.patients.map(p=>{
+    const acces=DB.access.filter(a=>a.patientId===p.id);
+    const profs=acces.map(a=>{const u=DB.users.find(x=>x.id===a.userId)||{};return (u.prenom||"")+" "+(u.nom||"");}).join(", ")||"—";
+    return `<tr><td style="font-weight:700">${p.prenom} ${p.nom}</td><td style="font-size:12px">${profs}</td><td style="font-size:12px;color:var(--g400)">${acces.length} accès</td></tr>`;
+  }).join("");
+  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Droits d'accès patients</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><table class="tbl"><thead><tr><th>Patient</th><th>Professionnels ayant accès</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div></div>`);
+}
+
+function showEffacement(){
+  const opts=DB.patients.map(p=>`<option value="${p.id}">${p.prenom} ${p.nom}</option>`).join("");
+  const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">🗑 Droit à l'effacement</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div style="padding:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:13px;color:#DC2626;margin-bottom:16px">⚠️ Cette action supprime définitivement toutes les données médicales du patient de Supabase. Elle est irréversible.</div>
+    <div class="fg"><label>Sélectionner le patient</label><select id="eff-pid" style="width:100%;padding:10px;border:1.5px solid var(--g200);border-radius:8px"><option value="">— Choisir —</option>${opts}</select></div>
+    <div class="fg" style="margin-top:12px"><label>Motif de l'effacement</label><input id="eff-motif" placeholder="Ex: Demande du patient, décès..."/></div>
+  </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bd" id="eff-btn">🗑 Effacer définitivement</button></div></div>`);
+  ov.querySelector("#eff-btn").onclick=()=>{
+    const pid=document.getElementById("eff-pid").value;
+    const motif=document.getElementById("eff-motif").value;
+    if(!pid){alert("Sélectionnez un patient");return;}
+    if(!confirm("Confirmer la suppression définitive de toutes les données de ce patient ?")) return;
+    // Supprimer dans DB locale
+    DB.patients=DB.patients.filter(p=>p.id!==pid);
+    delete DB.consultations[pid]; delete DB.labos[pid]; delete DB.rx[pid]; delete DB.imagerie[pid];
+    DB.access=DB.access.filter(a=>a.patientId!==pid);
+    DB.rdv=(DB.rdv||[]).filter(r=>r.patientId!==pid);
+    // Supprimer dans Supabase
+    ["consultations","labos","prescriptions","imagerie","patient_access","rdv"].forEach(t=>{
+      supaFetch(t+"?patient_id=eq."+pid,{method:"DELETE"});
+    });
+    supaFetch("patients?id=eq."+pid,{method:"DELETE"});
+    if(DB.logs) DB.logs.push({type:"effacement",date:today(),medecin:currentUser.id,patient:pid,action:"Effacement CNDP : "+motif});
+    saveDB(DB);
+    ov.remove();
+    alert("✅ Données du patient supprimées.");
+    rAdmin();
+  };
+}
+
 
 function showAddPatient(){
   // ── Étape 1 : Recherche doublon avant création ────────────
