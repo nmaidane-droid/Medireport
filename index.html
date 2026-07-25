@@ -1035,6 +1035,7 @@ function doLogin(){
         currentUser = _ADMIN_USER;
         G("ls").classList.remove("on"); G("ls").style.display="none";
         G("ms").classList.add("on"); G("ms").style.display="flex";
+        closeLoginModal();
         currentPage = ROLE_CFG[_ADMIN_USER.role].nav[0];
         resetSessionTimer();
         buildSidebar();
