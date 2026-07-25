@@ -547,24 +547,30 @@ function isSeen(userId, itemId, itemType) {
 const _SB_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
 const _SB_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
 
-// ── Admin hardcodé (indépendant de Supabase) ─────────────
-const _ADMIN_LOGIN = "admin";
-const _ADMIN_PIN_HASH = "c27930584abbf709a1858e7e75ec8e0e579cffd2d56c36142f15190a4df3a4c2";
-const _ADMIN_USER = {id:"u_admin",prenom:"Administrateur",nom:"",role:"admin",login:"admin",initials:"AD",color:"#1A6EFF",pin:null};
-async function _hashPin(pin){ const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin)); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join(""); }
+// Admin vérifié côté serveur via /api/login
+
+let SESSION_TOKEN = localStorage.getItem("mr_token") || null;
 
 async function supaFetch(path, opts){
-  const url = _SB_URL + "/rest/v1/" + path;
-  const headers = {
-    "apikey": _SB_KEY,
-    "Authorization": "Bearer " + _SB_KEY,
-    "Content-Type": "application/json",
-    "Prefer": opts?.prefer || (opts?.method && opts.method!=="GET" ? "return=representation" : ""),
-  };
-  const res = await fetch(url, { method: opts?.method||"GET", headers, body: opts?.body });
+  const res = await fetch("/api/db", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-session": SESSION_TOKEN || "" },
+    body: JSON.stringify({
+      path: path,
+      method: opts?.method || "GET",
+      body: opts?.body,
+      prefer: opts?.prefer
+    })
+  });
+  if(res.status === 401){
+    // Session expirée → retour au login
+    SESSION_TOKEN = null;
+    localStorage.removeItem("mr_token");
+    throw new Error("Session expirée");
+  }
   if(!res.ok) throw new Error("supaFetch error: " + res.status);
   const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  return text && text !== "null" ? JSON.parse(text) : null;
 }
 
 // ── Fonctions de tri globales ──────────────────────────────
@@ -1037,110 +1043,75 @@ function doLogin(){
     return;
   }
 
-  // ── Vérification admin hardcodé en priorité ──
-  if(loginVal === _ADMIN_LOGIN){
-    _hashPin(lsPinEntry).then(hash=>{
-      if(hash === _ADMIN_PIN_HASH){
-        lsPinEntry="";
-        currentUser = _ADMIN_USER;
-        G("ls").classList.remove("on"); G("ls").style.display="none";
-        G("ms").classList.add("on"); G("ms").style.display="flex";
-        closeLoginModal();
-        if(!DB.logs) DB.logs=[];
-        DB.logs.push({type:"connexion",date:today(),heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),medecin:_ADMIN_USER.id,patient:"—",action:"Connexion réussie",timestamp:new Date().toISOString()});
-        saveDB(DB);
-        currentPage = ROLE_CFG[_ADMIN_USER.role].nav[0];
-        resetSessionTimer();
-        buildSidebar();
-        renderPage();
-        startRealtimePro();
-      } else {
-        if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
-        for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
-        setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
-      }
-    });
-    return;
-  }
-
-  // Si cache vide, charger users depuis Supabase
-  if(!DB.users||!DB.users.length){
-    const _p=lsPinEntry, _l=loginVal;
-    if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Connexion...";}
-    supaFetch("users?select=*").then(rows=>{
-      if(rows&&rows.length){ DB.users=rows.map(u=>({...u,patientId:u.patient_id})); }
-      lsPinEntry=_p;
-      document.getElementById("ls-login-inp").value=_l;
-      if(errEl) errEl.textContent="";
-      doLogin();
-    }).catch(()=>{if(errEl){errEl.textContent="Service indisponible";errEl.style.color="var(--red)";}});
-    return;
-  }
-
-  const user=DB.users.find(u=>(u.login||"").toLowerCase()===loginVal);
-
-  if(!user){
-    if(errEl){errEl.textContent="Identifiant inconnu";errEl.style.color="var(--red)";}
-    for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
-    setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
-    return;
-  }
-
   if(lsPinEntry.length<6){
     if(errEl){errEl.textContent="Saisissez votre code PIN (6 chiffres)";errEl.style.color="var(--red)";}
     return;
   }
 
-  if(lsPinEntry!==(user.pin||"000000")){
-    if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
+  const pinErr=(msg)=>{
+    if(errEl){errEl.textContent=msg;errEl.style.color="var(--red)";}
     for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
     setTimeout(()=>{lsPinEntry="";for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot";}if(errEl)errEl.textContent="";},1500);
-    return;
-  }
+  };
 
-  // ✅ Succès — chargement Supabase
-  lsPinEntry="";
-  // Afficher indicateur de chargement
-  if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Chargement des données…"; }
+  if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Vérification…"; }
 
-  loadDBFromSupabase().then(freshDB => {
-    DB = freshDB;
-    if(!DB || !DB.users || !DB.users.length) { showServiceUnavailable(); return; }
-    // Récupérer l'utilisateur depuis la DB fraîche (données à jour)
-    const freshUser = DB.users.find(u=>(u.login||"").toLowerCase()===loginVal) || user;
-    currentUser = freshUser;
+  // ── Authentification côté serveur ──
+  fetch("/api/login", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ login: loginVal, pin: lsPinEntry })
+  }).then(async res => {
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){ pinErr(data.error || "Échec de connexion"); return; }
 
-    // Charger les seen items depuis Supabase
-    loadSeenSupabase(freshUser.id).then(()=>{ renderPage(); });
-    if(!DB.logs) DB.logs=[];
-    DB.logs.push({
-      type:"connexion",
-      date:today(),
-      heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
-      medecin:freshUser.id,
-      patient:"—",
-      action:"Connexion réussie",
-      timestamp:new Date().toISOString()
+    // ✅ Authentifié
+    lsPinEntry="";
+    SESSION_TOKEN = data.token;
+    localStorage.setItem("mr_token", SESSION_TOKEN);
+    currentUser = data.user;
+    if(currentUser.patient_id && !currentUser.patientId) currentUser.patientId = currentUser.patient_id;
+
+    if(errEl){ errEl.style.color="var(--blue)"; errEl.textContent="⏳ Chargement des données…"; }
+
+    loadDBFromSupabase().then(freshDB => {
+      DB = freshDB;
+      // Rafraîchir currentUser depuis la DB fraîche si présent (hors admin hardcodé)
+      const freshUser = (DB.users||[]).find(u=>(u.login||"").toLowerCase()===loginVal);
+      if(freshUser) currentUser = freshUser;
+
+      loadSeenSupabase(currentUser.id).then(()=>{ renderPage(); }).catch(()=>{});
+
+      if(!DB.logs) DB.logs=[];
+      DB.logs.push({
+        type:"connexion", date:today(),
+        heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
+        medecin:currentUser.id, patient:"—",
+        action:"Connexion réussie", timestamp:new Date().toISOString()
+      });
+      saveDB(DB);
+
+      closeLoginModal();
+      G("ls").classList.remove("on"); G("ls").style.display="none";
+      G("ms").classList.add("on"); G("ms").style.display="flex";
+      currentPage=ROLE_CFG[currentUser.role].nav[0];
+      resetSessionTimer();
+      buildSidebar(); renderPage();
+      startRealtimePro();
+
+      setTimeout(()=>{
+        checkBackupReminder();
+        const lastB = localStorage.getItem("medirecord_last_backup");
+        const el = document.getElementById("last-backup-date");
+        if(el && lastB) el.textContent = new Date(lastB).toLocaleDateString("fr-FR");
+        else if(el) el.textContent = "Jamais";
+      }, 500);
+    }).catch(err => {
+      console.error("Erreur chargement DB:", err);
+      if(errEl){ errEl.style.color="var(--red)"; errEl.textContent="Erreur de chargement des données"; }
     });
-
-    closeLoginModal();
-    G("ls").classList.remove("on"); G("ls").style.display="none";
-    G("ms").classList.add("on"); G("ms").style.display="flex";
-    currentPage=ROLE_CFG[currentUser.role].nav[0];
-    resetSessionTimer();
-    buildSidebar(); renderPage();
-    startRealtimePro(); // Niveau 3 : Realtime
-
-    setTimeout(()=>{
-      checkBackupReminder();
-      const lastB = localStorage.getItem("medirecord_last_backup");
-      const el = document.getElementById("last-backup-date");
-      if(el && lastB) el.textContent = new Date(lastB).toLocaleDateString("fr-FR");
-      else if(el) el.textContent = "Jamais";
-    }, 500);
-  }).catch(err => {
-    console.error("Erreur chargement DB:", err);
-    if(errEl){ errEl.style.color="var(--red)"; errEl.textContent="Erreur de connexion au serveur"; }
+  }).catch(() => {
+    pinErr("Service indisponible — vérifiez votre connexion");
   });
 }
 
@@ -1352,7 +1323,7 @@ async function ocrLaboPDF(input, demandeId){
     const isPDF = file.type === "application/pdf";
     const mediaType = isPDF ? "application/pdf" : (file.type || "image/jpeg");
 
-    const response = await fetch("https://api.anthropic.com/v1/messages",{
+    const response = await fetch("/api/claude",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -3011,7 +2982,7 @@ async function handleOcrFile(input, pid){
     const mediaType = isImage ? file.type : 'application/pdf';
     
     // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4160,7 +4131,7 @@ async function ocrImagerieDoc(input){
     const isPDF = file.type==="application/pdf";
     const mediaType = isPDF?"application/pdf":(file.type||"image/jpeg");
 
-    const response = await fetch("https://api.anthropic.com/v1/messages",{
+    const response = await fetch("/api/claude",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -6337,6 +6308,8 @@ function extendSession(){
 function doLogout(){
   clearTimeout(sessionTimer);
   currentUser = null;
+  SESSION_TOKEN = null;
+  localStorage.removeItem("mr_token");
   G("ms").classList.remove("on"); G("ms").style.display="none";
   G("ls").classList.add("on"); G("ls").style.display="flex";
 }
@@ -6882,6 +6855,16 @@ function startRealtimePro(){
   ws.onerror = ()=> console.warn("[Supabase Realtime] Erreur connexion");
   ws.onclose = ()=>{
     console.warn("[Supabase Realtime] Déconnecté — reconnexion dans 30s");
+    window._rtFails = (window._rtFails||0) + 1;
+    // Après 3 échecs (ex: RLS activé), basculer en rafraîchissement périodique
+    if(window._rtFails >= 3 && !window._pollTimer){
+      console.warn("[MediReport] Realtime indisponible — bascule en polling 90s");
+      window._pollTimer = setInterval(()=>{
+        if(currentUser && SESSION_TOKEN && document.visibilityState==="visible"){
+          loadDBFromSupabase().then(fresh=>{ DB=fresh; renderPage(); }).catch(()=>{});
+        }
+      }, 90000);
+    }
     setTimeout(startRealtimePro, 30000);
   };
 }
