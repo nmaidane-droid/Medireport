@@ -1033,8 +1033,13 @@ function doLogin(){
       if(hash === _ADMIN_PIN_HASH){
         lsPinEntry="";
         currentUser = _ADMIN_USER;
-        if(errEl){errEl.style.color="var(--blue)";errEl.textContent="⏳ Chargement des données…";}
+        G("ls").classList.remove("on"); G("ls").style.display="none";
+        G("ms").classList.add("on"); G("ms").style.display="flex";
+        currentPage = ROLE_CFG[_ADMIN_USER.role].nav[0];
+        resetSessionTimer();
+        buildSidebar();
         renderPage();
+        startRealtimePro();
       } else {
         if(errEl){errEl.textContent="Code PIN incorrect";errEl.style.color="var(--red)";}
         for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d)d.className="pin-dot error";}
