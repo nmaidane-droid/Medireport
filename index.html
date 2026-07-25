@@ -402,6 +402,11 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
       <div class="pg" id="pg-users"></div>
       <div class="pg" id="pg-acces"></div>
       <div class="pg" id="pg-admin"></div>
+      <div class="pg" id="pg-admin-stats"></div>
+      <div class="pg" id="pg-admin-users"></div>
+      <div class="pg" id="pg-admin-mobile"></div>
+      <div class="pg" id="pg-admin-backup"></div>
+      <div class="pg" id="pg-admin-cndp"></div>
     </div>
   </div>
 </div>
@@ -415,7 +420,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 // ══════════════════════════════════════════════════════════
 
 const ROLE_CFG = {
-  admin:      {l:"Administrateur", i:"⚙️", c:"#111827", nav:["dashboard","patients","agenda","users","admin"]},
+  admin:      {l:"Administrateur", i:"⚙️", c:"#111827", nav:["admin-stats","admin-users","admin-mobile","admin-backup","admin-cndp"]},
   medecin:    {l:"Médecin référent",i:"🩺", c:"#1A6EFF", nav:["dashboard","patients","agenda"]},
   specialiste:{l:"Spécialiste",     i:"❤️", c:"#E53935", nav:["dashboard","patients","agenda"]},
   laboratoire:{l:"Laboratoire",     i:"🧪", c:"#0BA896", nav:["dashboard","patients","agenda"]},
@@ -499,6 +504,11 @@ const NAV_CFG = {
   users:    {l:"Utilisateurs",   i:"👤"},
   acces:    {l:"Gestion accès",  i:"🔐"},
   admin:    {l:"Administration", i:"⚙️"},
+  "admin-stats":  {l:"Statistiques",             i:"📊"},
+  "admin-users":  {l:"Utilisateurs",              i:"👥"},
+  "admin-mobile": {l:"Accès mobiles",             i:"📱"},
+  "admin-backup": {l:"Sauvegarde & Restauration", i:"💾"},
+  "admin-cndp":   {l:"Conformité CNDP",           i:"🔒"},
 };
 
 // Default data
@@ -1288,18 +1298,7 @@ function buildSidebar(){
 
   // Reset DB — only for admin
   if(u.role === "admin"){
-    const resetDiv = document.createElement("div");
-    resetDiv.className = "ni";
-    resetDiv.style.cssText = "padding:10px 14px;color:var(--red);font-weight:700";
-    resetDiv.innerHTML = '<span class="ni-ico">🗑</span>Réinitialiser la base';
-    resetDiv.addEventListener("click", ()=>{
-      if(confirm("Réinitialiser TOUTES les données ? Cette action est irréversible.")){
-        localStorage.removeItem("medirecord_db");
-        
-        location.reload();
-      }
-    });
-    nav.appendChild(resetDiv);
+
   }
 
   // Déconnexion — nav item avec double espacement
@@ -1612,7 +1611,7 @@ function goPage(id){
   document.querySelectorAll(".pg").forEach(p=>p.classList.remove("on"));
   const pg=G("pg-"+id);if(pg)pg.classList.add("on");
   buildSidebar();
-  ({dashboard:rDashboard,patients:rPatients,dossier:rDossier,agenda:rAgenda,users:rUsers,acces:rAcces,admin:rAdmin}[id]||function(){})();
+  ({dashboard:rDashboard,patients:rPatients,dossier:rDossier,agenda:rAgenda,users:rUsers,acces:rAcces,admin:rAdmin,"admin-stats":rAdminStats,"admin-users":rAdminUsers,"admin-mobile":rAccesMobile,"admin-backup":rAdminBackup,"admin-cndp":rAdminCNDP}[id]||function(){})();
 }
 function renderPage(){goPage(currentPage);renderNotifBadge();}
 
@@ -4871,6 +4870,153 @@ function printRecapAcces(drId, mois) {
   });
 }
 
+function rAdminStats(){
+  const s=(v,l,c)=>`<div class="card" style="text-align:center;padding:16px"><div style="font-size:28px;font-weight:900;color:${c}">${v}</div><div style="font-size:12px;color:var(--g400);margin-top:4px">${l}</div></div>`;
+  G("pg-admin-stats").innerHTML=`
+    <div class="sec-hd"><div><div class="sec-tit">📊 Statistiques</div></div></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${s(DB.users.filter(u=>u.role!=="patient").length,"Utilisateurs","var(--blue)")}
+      ${s(DB.users.filter(u=>u.role==="medecin").length,"Médecins","#1A6EFF")}
+      ${s(DB.users.filter(u=>u.role==="specialiste").length,"Spécialistes","#E53935")}
+      ${s(DB.users.filter(u=>u.role==="laboratoire").length,"Laboratoires","#0BA896")}
+      ${s(DB.users.filter(u=>u.role==="imagerie").length,"Imageries","#F59E0B")}
+      ${s(DB.users.filter(u=>u.role==="patient").length,"Accès mobiles","#7C3AED")}
+      ${s(DB.patients.length,"Patients","#0F172A")}
+      ${s(Object.values(DB.consultations||{}).reduce((a,b)=>a+b.length,0),"Consultations","#16A34A")}
+      ${s((DB.rdv||[]).length,"Rendez-vous","#DC2626")}
+      ${s(Object.values(DB.labos||{}).reduce((a,b)=>a+b.length,0),"Bilans labo","#0BA896")}
+      ${s(Object.values(DB.imagerie||{}).reduce((a,b)=>a+b.length,0),"Imageries méd.","#F59E0B")}
+      ${s(Object.values(DB.rx||{}).reduce((a,b)=>a+b.length,0),"Prescriptions","#7C3AED")}
+    </div>`;
+}
+
+function rAdminUsers(search){
+  const q=(search||"").toLowerCase();
+  const sorted=[...DB.users].filter(u=>u.role!=="patient").sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom,"fr"));
+  const filtered=q?sorted.filter(u=>(u.nom+" "+u.prenom).toLowerCase().includes(q)||(u.spec||"").toLowerCase().includes(q)||(u.login||"").toLowerCase().includes(q)):sorted;
+  const rows=filtered.map(u=>{
+    const rc=ROLE_CFG[u.role]||{i:"?",l:u.role,c:"#888"};
+    const titre=u.titre?u.titre+" ":"";
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.nom} ${u.prenom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td>
+      <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
+      <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
+      <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"—"}</span></td>
+      <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
+    </tr>`;
+  }).join("");
+  G("pg-admin-users").innerHTML=`
+    <div class="sec-hd"><div><div class="sec-tit">👥 Utilisateurs (${filtered.length})</div></div><button class="btn bp" onclick="showAddUser()">+ Nouvel utilisateur</button></div>
+    <div style="margin-bottom:12px"><input placeholder="🔍 Rechercher..." oninput="rAdminUsers(this.value)" value="${search||""}" style="width:100%;padding:10px 14px;border:1.5px solid var(--g200);border-radius:10px;font-size:13px"/></div>
+    <div style="margin-bottom:10px;padding:10px 14px;background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r);font-size:12px;color:#92400E">🔒 PINs visibles uniquement par l'administrateur.</div>
+    <div class="card"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>Login</th><th>PIN</th><th>Actions</th></tr></thead><tbody>
+      ${rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--g400)">Aucun résultat</td></tr>'}
+    </tbody></table></div>`;
+}
+
+function rAdminBackup(){
+  G("pg-admin-backup").innerHTML=`
+    <div class="sec-hd"><div><div class="sec-tit">💾 Sauvegarde & Restauration</div></div></div>
+    <div class="card">
+      <div id="backup-status" style="margin-bottom:16px"><div style="padding:12px;border-radius:8px;background:var(--g50);color:var(--g400);font-size:13px">⏳ Vérification...</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <button class="btn bp" style="justify-content:center;padding:14px" onclick="backupDB()">💾 Sauvegarder</button>
+        <button class="btn bs" style="justify-content:center;padding:14px" onclick="restoreDB()">☁️ Restaurer depuis cloud</button>
+      </div>
+      <div style="font-size:11px;color:var(--g400)">⚠ La restauration remplace toutes les données actuelles.</div>
+    </div>`;
+  updateBackupStatus();
+}
+
+function rAdminCNDP(){
+  G("pg-admin-cndp").innerHTML=`
+    <div class="sec-hd"><div><div class="sec-tit">🔒 Conformité CNDP</div></div></div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn bs" style="padding:14px;justify-content:flex-start" onclick="showAccessLog()">📋 Journal de traçabilité</button>
+        <button class="btn bs" style="padding:14px;justify-content:flex-start" onclick="showDroitsPatient()">👤 Droits d'accès patient</button>
+        <button class="btn bs" style="padding:14px;justify-content:flex-start" onclick="showEffacement()">🗑 Droit à l'effacement</button>
+        <button class="btn bs" style="padding:14px;justify-content:flex-start" onclick="showMentionsLegales()">⚖️ Mentions légales</button>
+        <button class="btn bd" style="padding:14px;justify-content:flex-start;grid-column:1/-1" onclick="showViolationProcedure()">🚨 Signaler une violation</button>
+      </div>
+      <div style="margin-top:14px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
+    </div>`;
+}
+
+function showDroitsPatient(){
+  const rows=DB.patients.map(p=>{
+    const acces=DB.access.filter(a=>a.patientId===p.id);
+    const profs=acces.map(a=>{const u=DB.users.find(x=>x.id===a.userId)||{};return (u.prenom||"")+" "+(u.nom||"");}).join(", ")||"—";
+    return `<tr><td style="font-weight:700">${p.prenom} ${p.nom}</td><td style="font-size:12px">${profs}</td><td style="font-size:12px;color:var(--g400)">${acces.length}</td></tr>`;
+  }).join("");
+  modal(`<div class="mb"><div class="mh"><span class="mt2">👤 Droits d'accès patients</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><table class="tbl"><thead><tr><th>Patient</th><th>Professionnels</th><th>Accès</th></tr></thead><tbody>${rows}</tbody></table></div></div>`);
+}
+
+function showEffacement(){
+  const opts=DB.patients.map(p=>`<option value="${p.id}">${p.prenom} ${p.nom}</option>`).join("");
+  const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">🗑 Droit à l'effacement</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div style="padding:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:13px;color:#DC2626;margin-bottom:16px">⚠️ Action irréversible. Supprime définitivement toutes les données du patient de Supabase.</div>
+    <div class="fg"><label>Patient</label><select id="eff-pid" style="width:100%;padding:10px;border:1.5px solid var(--g200);border-radius:8px"><option value="">— Choisir —</option>${opts}</select></div>
+    <div class="fg" style="margin-top:12px"><label>Motif</label><input id="eff-motif" placeholder="Ex: Demande du patient, décès..."/></div>
+  </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bd" id="eff-btn">🗑 Effacer définitivement</button></div></div>`);
+  ov.querySelector("#eff-btn").onclick=()=>{
+    const pid=document.getElementById("eff-pid").value;
+    const motif=document.getElementById("eff-motif").value;
+    if(!pid){alert("Sélectionnez un patient");return;}
+    if(!confirm("Confirmer la suppression définitive ?")) return;
+    DB.patients=DB.patients.filter(p=>p.id!==pid);
+    delete DB.consultations[pid]; delete DB.labos[pid]; delete DB.rx[pid]; delete DB.imagerie[pid];
+    DB.access=DB.access.filter(a=>a.patientId!==pid);
+    DB.rdv=(DB.rdv||[]).filter(r=>r.patientId!==pid);
+    ["consultations","labos","prescriptions","imagerie","patient_access","rdv"].forEach(t=>supaFetch(t+"?patient_id=eq."+pid,{method:"DELETE"}));
+    supaFetch("patients?id=eq."+pid,{method:"DELETE"});
+    saveDB(DB);
+    ov.remove();
+    alert("✅ Données supprimées.");
+  };
+}
+
+async function updateBackupStatus(){
+  const el=document.getElementById("backup-status");
+  if(!el) return;
+  try{
+    const rows=await supaFetch("backups?order=created_at.desc&limit=1&select=id,created_at,label");
+    if(!rows||!rows.length){el.innerHTML=`<div style="padding:12px;border-radius:8px;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700">⚠️ Aucun backup enregistré</div>`;return;}
+    const last=rows[0];
+    const diffDays=Math.floor((new Date()-new Date(last.created_at))/(1000*60*60*24));
+    const isToday=diffDays===0,isRecent=diffDays<=3;
+    const color=isToday?"#16A34A":isRecent?"#D97706":"#DC2626";
+    const bg=isToday?"#F0FDF4":isRecent?"#FFFBEB":"#FEF2F2";
+    const border=isToday?"#BBF7D0":isRecent?"#FDE68A":"#FECACA";
+    const label=isToday?"✅ Backup du jour":isRecent?`⚠️ Backup il y a ${diffDays} jour(s)`:`🔴 Backup il y a ${diffDays} jour(s) — Action requise`;
+    el.innerHTML=`<div style="padding:12px 16px;border-radius:8px;background:${bg};border:1.5px solid ${border};color:${color};font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>${label}</span><span style="font-size:11px;font-weight:500;opacity:.8">${last.label||new Date(last.created_at).toLocaleDateString("fr-FR")}</span></div>`;
+  }catch(e){el.innerHTML=`<div style="padding:12px;border-radius:8px;background:#FEF2F2;color:#DC2626;font-size:13px">❌ Impossible de vérifier le backup</div>`;}
+}
+
+async function backupDB(){
+  try{
+    const backup={id:"backup-"+Date.now(),version:"3.0",label:today()+" "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),created_by:currentUser?.id||"admin",data:DB};
+    await supaFetch("backups",{method:"POST",body:JSON.stringify({id:backup.id,version:backup.version,label:backup.label,created_by:backup.created_by,data:backup.data})});
+    localStorage.setItem("medirecord_last_backup",new Date().toISOString());
+    updateBackupStatus();
+    alert("✅ Backup sauvegardé dans Supabase.");
+  }catch(err){alert("❌ Erreur : "+err.message);}
+}
+
+async function restoreDB(){
+  if(!confirm("Restaurer le dernier backup depuis Supabase ?\nCela remplacera TOUTES les données actuelles.")) return;
+  try{
+    const rows=await supaFetch("backups?order=created_at.desc&limit=1&select=*");
+    if(!rows||!rows.length){alert("❌ Aucun backup trouvé.");return;}
+    const backup=rows[0];
+    if(!confirm(`Restaurer le backup du ${backup.label} ?`)) return;
+    DB=backup.data;
+    localStorage.setItem("medirecord_db",JSON.stringify(DB));
+    alert("✅ Backup restauré. L'application va se recharger.");
+    location.reload();
+  }catch(err){alert("❌ Erreur : "+err.message);}
+}
+
 function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Administration</div></div></div><div class="g2"><div class="card"><div class="ch"><div class="ctit"><span class="ci">👥</span> Patients</div>${bdg(DB.patients.length+" patients","bb")}</div>${DB.patients.map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans · ${(p.pathologies||[]).join(", ")||"—"}</div></div><button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button></div>`).join("")}<div style="margin-top:12px"><button class="btn bp" style="width:100%" onclick="showAddPatient()">+ Nouveau patient</button></div></div><div><div class="card" style="margin-bottom:16px"><div class="ch"><div class="ctit"><span class="ci">👤</span> Utilisateurs par rôle</div></div>${Object.entries(ROLE_CFG).map(([k,v])=>{const count=DB.users.filter(u=>u.role===k).length;return `<div class="ur"><div style="width:34px;height:34px;border-radius:50%;background:${v.c}22;display:flex;align-items:center;justify-content:center;font-size:16px">${v.i}</div><div style="flex:1"><div class="ur-name">${v.l}</div></div>${bdg(count+" compte(s)","bgr")}</div>`;}).join("")}</div><div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">📱</span> Accès mobiles</div><button class="btn bp bsm" onclick="rAccesMobile()">Voir le tableau</button></div><div id="acces-mobile-preview"></div></div>
 <div class="card" style="margin-bottom:14px"><div class="ch"><div class="ctit"><span class="ci">💾</span> Sauvegarde & Restauration</div></div>
   <div style="font-size:12px;color:var(--g500);margin-bottom:12px">
@@ -4891,7 +5037,7 @@ function rAdmin(){G("pg-admin").innerHTML=`<div class="sec-hd"><div><div class="
   </div>
   <div style="margin-top:10px;font-size:11px;color:var(--g500)">Loi 09-08 · Protection des données à caractère personnel · CNDP Maroc</div>
 </div>
-<div class="card"><div class="ch"><div class="ctit"><span class="ci">⚠️</span> Danger</div></div><button class="btn bd" style="width:100%;justify-content:center;margin-bottom:10px" onclick="if(confirm('Réinitialiser TOUTES les données ?')){localStorage.removeItem('medirecord_db');location.reload();}">🗑 Réinitialiser la base de données</button><div style="font-size:11px;color:var(--g400)">Supprime toutes les données et restaure la démo.</div></div></div></div>`;}
+</div></div>`;}
 
 function showAddPatient(){
   // ── Étape 1 : Recherche doublon avant création ────────────
