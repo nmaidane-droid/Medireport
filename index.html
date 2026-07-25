@@ -1046,6 +1046,9 @@ function doLogin(){
         G("ls").classList.remove("on"); G("ls").style.display="none";
         G("ms").classList.add("on"); G("ms").style.display="flex";
         closeLoginModal();
+        if(!DB.logs) DB.logs=[];
+        DB.logs.push({type:"connexion",date:today(),heure:new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),medecin:_ADMIN_USER.id,patient:"—",action:"Connexion réussie",timestamp:new Date().toISOString()});
+        saveDB(DB);
         currentPage = ROLE_CFG[_ADMIN_USER.role].nav[0];
         resetSessionTimer();
         buildSidebar();
@@ -4620,7 +4623,7 @@ function showAddUser(){
   const roleOpts=Object.entries(ROLE_CFG).map(([k,v])=>`<option value="${k}">${v.i} ${v.l}</option>`).join("");
   const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Nouvel utilisateur</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Titre</label><select id="nu-ti"><option value="">Dr.</option><option value="Pr">Pr</option><option value="M.">M.</option><option value="Mme">Mme</option></select></div><div class="fg"><label>Rôle</label><select id="nu-rl">${roleOpts}</select></div></div><div class="fr"><div class="fg"><label>Prénom</label><input id="nu-pr" placeholder="Prénom"/></div><div class="fg"><label>Nom</label><input id="nu-nm" placeholder="Nom"/></div></div><div class="fg"><label>Spécialité</label><select id="nu-sp"><option value="">— Sélectionner —</option>${specOptions()}</select></div><div class="fg"><label>Structure / Établissement</label><input id="nu-st" placeholder="Clinique, Cabinet, Labo..."/></div><div class="fg"><label>Adresse complète</label><input id="nu-adr" placeholder="Ex : 12 Rue Ibn Batouta, Casablanca"/></div><div class="fg"><label>Téléphone professionnel</label><input id="nu-tel" placeholder="Ex : +212 5 22 00 00 00"/></div><div class="fg"><label>Code PIN généré automatiquement</label>
   <div style="background:#0F172A;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-    <span id="nu-pin-disp" style="font-size:28px;font-weight:900;color:#1A6EFF;font-family:monospace;letter-spacing:8px"></span>
+    <span id="nu-pin-disp" style="font-size:28px;font-weight:900;color:#fff;background:#000;font-family:monospace;letter-spacing:8px;padding:8px 16px;border-radius:8px;display:inline-block;min-width:140px;text-align:center"></span>
     <button type="button" class="btn bp bsm" onclick="const p=generatePIN();document.getElementById('nu-pin').value=p;document.getElementById('nu-pin-disp').textContent=p;" style="white-space:nowrap">🎲</button>
   </div>
   <input id="nu-pin" type="hidden"/>
@@ -4645,7 +4648,7 @@ function showEditUser(uid2){
     <input id="eu-pin" type="text" maxlength="6" value="${u.pin||''}" style="letter-spacing:8px;font-size:18px;text-align:center;flex:1"/>
     <button type="button" class="btn bs bsm" onclick="const p=generatePIN();document.getElementById('eu-pin').value=p;document.getElementById('eu-pin-disp').textContent='Nouveau PIN : '+p;" style="white-space:nowrap">🎲 Régénérer</button>
   </div>
-  <div id="eu-pin-disp" style="font-size:12px;color:var(--green);font-weight:700;margin-top:4px"></div>
+  <div id="eu-pin-disp" style="font-size:20px;font-weight:900;font-family:monospace;letter-spacing:8px;color:#fff;background:#000;padding:8px 16px;border-radius:8px;margin-top:6px;display:inline-block;min-width:140px;text-align:center"></div>
   <div style="font-size:11px;color:var(--g400);margin-top:3px">Communiquez le nouveau PIN à l'utilisateur</div>
 </div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="eu-s">Enregistrer</button></div></div>`);
   ov.querySelector("#eu-s").onclick=()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin)u.pin=newPin;saveDB(DB,{table:"users",rows:[u]});ov.remove();rUsers();};
@@ -4656,22 +4659,27 @@ function rAcces(){const patients=DB.patients;const profs=DB.users.filter(u=>!["p
 function delAccess2(aid){if(!confirm("Révoquer ?"))return;DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);rAcces();}
 
 function rAccesMobile(filterMois, filterDr, filterStatut) {
-  // Récupérer tous les accès mobiles depuis Supabase
-  supaFetch("patient_access?type=eq.acces_mobile&select=*").then(rows => {
-    if (!rows) rows = [];
-
-    // Enrichir avec données patient et médecin
-    const acces = rows.map(r => {
-      const pat = DB.patients.find(p => p.id === r.patient_id) || {};
-      const dr = DB.users.find(u => u.id === r.active_par) || {};
-      return Object.assign({}, r, {
-        patNom: pat.prenom + " " + pat.nom,
-        patPath: (pat.pathologies||[]).join(", ") || "—",
-        drNom: (dr.titre ? dr.titre + " " : "") + dr.prenom + " " + dr.nom,
-        drSpec: dr.spec || "",
-        drId: r.active_par
-      });
-    });
+  // Source : DB.users role=patient + DB.access type=acces_mobile
+  const patientUsers = DB.users.filter(u => u.role === "patient");
+  const accessRows = DB.access.filter(a => a.type === "acces_mobile");
+  const acces = patientUsers.map(pu => {
+    const pat = DB.patients.find(p => p.id === pu.patientId) || {};
+    const accLog = accessRows.find(a => a.patientId === pu.patientId) || {};
+    const dr = DB.users.find(u => u.id === accLog.active_par) || {};
+    return {
+      id: accLog.id || pu.id,
+      patient_id: pu.patientId,
+      patNom: (pat.prenom||"") + " " + (pat.nom||""),
+      patPath: (pat.pathologies||[]).join(", ") || "—",
+      drNom: dr.id ? ((dr.titre?dr.titre+" ":"")+(dr.prenom||"")+" "+(dr.nom||"")) : "—",
+      drSpec: dr.spec || "",
+      drId: dr.id || "",
+      date_activation: accLog.date_activation || accLog.date || "—",
+      facture: accLog.facture || false,
+      facture_date: accLog.facture_date || null
+    };
+  });
+  {
 
     // Filtres
     const moisList = [...new Set(acces.map(a => a.date_activation ? a.date_activation.substring(3) : ""))].filter(Boolean).sort().reverse();
@@ -4783,8 +4791,8 @@ function rAccesMobile(filterMois, filterDr, filterStatut) {
     }
 
     html += `</div>`;
-    G("pg-admin").innerHTML = `<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="rAdmin()">← Administration</button></div>` + html;
-  });
+    G("pg-admin-mobile").innerHTML = html;
+  }
 }
 
 async function toggleFacture(accessId, checked, filterMois, filterDr, filterStatut) {
