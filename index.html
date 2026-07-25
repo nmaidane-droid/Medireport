@@ -6070,68 +6070,6 @@ function showAccessLog(filterDays){
 // ══════════════════════════════════════════════════════════
 //  SYSTÈME DE BACKUP
 // ══════════════════════════════════════════════════════════
-function backupDB(){
-  const backup = {
-    version: "3.0",
-    date: today(),
-    timestamp: new Date().toISOString(),
-    data: DB
-  };
-  const json = JSON.stringify(backup, null, 2);
-  const blob = new Blob([json], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "medirecord-backup-"+today().replace(/\//g,"-")+".json";
-  a.click();
-  URL.revokeObjectURL(url);
-  // Store last backup date
-  localStorage.setItem("medirecord_last_backup", new Date().toISOString());
-  if(!DB.logs) DB.logs=[];
-  DB.logs.push({
-    type:"backup",
-    date: today(),
-    heure: new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),
-    medecin: currentUser?.id||"admin",
-    patient:"—",
-    action:"Backup exporté",
-    timestamp: new Date().toISOString()
-  });
-  saveDB(DB);
-  alert("✅ Backup exporté avec succès.\nConservez ce fichier en lieu sûr (clé USB, cloud...).");
-}
-
-function restoreDB(){
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".json";
-  input.onchange = (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      try {
-        const backup = JSON.parse(ev.target.result);
-        if(!backup.data || !backup.data.patients){
-          alert("❌ Fichier invalide — ce n'est pas un backup MediReport Pro.");
-          return;
-        }
-        if(!confirm(`Restaurer le backup du ${backup.date} ?\n\nCela remplacera TOUTES les données actuelles.\n\nContinuer ?`)) return;
-        // Restore
-        localStorage.setItem("medirecord_db", JSON.stringify(backup.data));
-        // version ignorée
-        localStorage.setItem("medirecord_last_backup", new Date().toISOString());
-        alert("✅ Backup restauré avec succès. L'application va se recharger.");
-        location.reload();
-      } catch(err){
-        alert("❌ Erreur de lecture du fichier backup.");
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-}
-
 function checkBackupReminder(){
   const last = localStorage.getItem("medirecord_last_backup");
   if(!last) return; // First use — no reminder
