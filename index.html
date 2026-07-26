@@ -2304,7 +2304,7 @@ function rPatients(){
     (p.cin||"").toLowerCase().includes(search)
   );
   // Sort alphabetically by prenom then nom
-  patients.sort((a,b)=>(a.prenom+" "+a.nom).localeCompare(b.prenom+" "+b.nom,"fr"));
+  patients.sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||""),"fr"));
   const isAdmin=["admin","medecin","specialiste"].includes(u.role);
 
   const rows=patients.map(p=>{
@@ -2358,7 +2358,7 @@ function filterPatients(q){
     p.pathologies?.some(x=>x.toLowerCase().includes(search))||
     p.ville?.toLowerCase().includes(search)
   );
-  patients.sort((a,b)=>(a.prenom+" "+a.nom).localeCompare(b.prenom+" "+b.nom,"fr"));
+  patients.sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||""),"fr"));
   const rows=patients.map(p=>{
     const ref=DB.users.find(x=>x.id===p.medecin_ref);
     const rdvCount=DB.rdv.filter(r=>r.patientId===p.id).length;
@@ -5473,7 +5473,7 @@ function showEditPatient(pid){
     <div class="fr"><div class="fg"><label>Ville <span style="color:var(--red)">*</span></label><input id="ep-vl" value="${p.ville&&p.ville!=="—"?p.ville:""}"/></div><div class="fg"><label>Lieu de naissance <span style="color:var(--red)">*</span></label><input id="ep-lieu" value="${p.lieu_naissance||""}"/></div></div>
     <div class="fg"><label>Adresse <span style="color:var(--red)">*</span></label><input id="ep-adr" value="${p.adresse||""}"/></div>
     <div class="fg"><label>Antécédents <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-ant" value="${(p.antecedents||[]).join(", ")}"/></div>
-    <div class="fg"><label>Pathologies <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div>
+    <div class="fg"><label>Pathologies actives <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div>
     <div class="fg"><label>Allergies <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div>
     <div id="ep-err" style="color:var(--red);font-size:12px;font-weight:700;margin-top:8px"></div>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);
