@@ -567,6 +567,86 @@ function showTab(tab) {
 function emp(ico,txt){ return '<div class="empty"><span class="empty-i">'+ico+'</span>'+txt+'</div>'; }
 function bdg(t,c){ return '<span class="b '+c+'">'+t+'</span>'; }
 
+// ═══ v3 : ligne de vie + tendances (patient) ═══
+function _pFR(s){
+  if(!s) return null;
+  var m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+}
+
+function lifelineM(pid){
+  var now = new Date(); now.setHours(23,59,59,0);
+  var from = new Date(now.getTime() - 90*24*3600*1000);
+  var evts = [];
+  (DB.consultations[pid]||[]).forEach(function(c){var d=_pFR(c.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Consult.",tab:"con",w:false});});
+  (DB.labos[pid]||[]).forEach(function(l){var d=_pFR(l.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Bilan",tab:"lab",w:(l.res||[]).some(function(r){return r.s==="bad";})});});
+  (DB.imagerie[pid]||[]).forEach(function(i){var d=_pFR(i.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Imagerie",tab:"img",w:i.res&&i.res!=="Normal"});});
+  if(!evts.length) return "";
+  evts.sort(function(a,b){return a.d-b.d;});
+  var shown = evts.slice(-5);
+  var span = now - from;
+  function pos(e){ return 8 + 84 * (e.d - from) / span; }
+
+  var W=1000, base=28, pts=[[0,base]];
+  shown.forEach(function(e){
+    var x = pos(e)*10;
+    pts.push([x-30,base],[x-18,base-16],[x-6,base+18],[x+4,base-9],[x+14,base],[x+26,base]);
+  });
+  pts.push([W,base]);
+  pts = pts.filter(function(pt,i,a){return i===0||pt[0]>=a[i-1][0];});
+  var poly = pts.map(function(pt){return pt[0].toFixed(0)+","+pt[1];}).join(" ");
+
+  var dots = shown.map(function(e){
+    return '<div onclick="var t=document.querySelector(\'.tab[data-t=\\\''+e.tab+'\\\']\');if(t)t.click();" '+
+      'style="position:absolute;left:'+pos(e).toFixed(1)+'%;top:-22px;transform:translateX(-50%);text-align:center">'+
+      '<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid '+(e.w?"#E53935":"var(--blue)")+';margin:0 auto 3px"></div>'+
+      '<div style="font-size:9px;font-weight:700;color:#44403C;white-space:nowrap">'+e.t+'</div>'+
+      '<div style="font-size:8.5px;color:#A8A29E;font-family:monospace">'+("0"+e.d.getDate()).slice(-2)+"/"+("0"+(e.d.getMonth()+1)).slice(-2)+'</div></div>';
+  }).join("");
+
+  return '<div class="card" style="padding-bottom:34px"><div class="ctit">💓 Ma ligne de vie · 90 jours</div>'+
+    '<svg viewBox="0 0 '+W+' 56" preserveAspectRatio="none" style="width:100%;height:44px;display:block">'+
+    '<polyline points="'+poly+'" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" opacity=".8"/></svg>'+
+    '<div style="position:relative;height:0">'+dots+'</div></div>';
+}
+
+function trendsM(pid){
+  var labos = (DB.labos[pid]||[]).map(function(l){return {d:_pFR(l.date),res:l.res||[]};})
+    .filter(function(l){return l.d;}).sort(function(a,b){return a.d-b.d;});
+  if(labos.length < 2) return "";
+  var series = {};
+  labos.forEach(function(l){ l.res.forEach(function(r){
+    var v = parseFloat(String(r.v).replace(",",".").replace(/[^\d.\-]/g,""));
+    if(isNaN(v)) return;
+    if(!series[r.p]) series[r.p] = {u:r.u||"", pts:[]};
+    series[r.p].pts.push({v:v, s:r.s});
+  });});
+  var list = Object.keys(series).map(function(name){
+    var s = series[name];
+    return {name:name, u:s.u, pts:s.pts, last:s.pts[s.pts.length-1],
+      prio:(s.pts[s.pts.length-1].s==="bad")?2:(s.pts[s.pts.length-1].s==="warn")?1:0};
+  }).filter(function(t){return t.pts.length>=2;})
+    .sort(function(a,b){return b.prio-a.prio || b.pts.length-a.pts.length;}).slice(0,5);
+  if(!list.length) return "";
+
+  var rows = list.map(function(t){
+    var vals = t.pts.map(function(pp){return pp.v;});
+    var min = Math.min.apply(null,vals), max = Math.max.apply(null,vals), rng = (max-min)||1;
+    var sw=60, sh=18;
+    var line = t.pts.map(function(pp,i){
+      return (i*sw/(t.pts.length-1)).toFixed(1)+","+((sh-2-(pp.v-min)/rng*(sh-4))).toFixed(1);
+    }).join(" ");
+    var bad = t.last.s==="bad";
+    var color = bad?"#E53935":(t.last.s==="warn"?"#D97706":"var(--blue)");
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px dashed #E7E5E4">'+
+      '<span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.name+'</span>'+
+      '<svg viewBox="0 0 '+sw+' '+sh+'" style="width:60px;height:18px;flex-shrink:0"><polyline points="'+line+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round"/></svg>'+
+      '<span style="font-family:monospace;font-size:13px;font-weight:700;color:'+(bad?"#E53935":"#1C1917")+';white-space:nowrap">'+t.last.v+' <span style="font-size:9.5px;color:#A8A29E;font-weight:400">'+t.u+'</span></span></div>';
+  }).join("");
+
+  return '<div class="card"><div class="ctit">📈 Mes constantes · '+labos.length+' bilans</div>'+rows+'</div>';
+}
+
 function tabSyn() {
   var p=PAT;
   var rx=sortByDate((DB.rx[p.id]||[]).filter(function(r){return r.s==="active";}), 'date', false);
@@ -592,6 +672,8 @@ function tabSyn() {
     h+='<div class="ale ale-r"><span>⚠️</span><div><strong>Allergie :</strong> '+a+'</div></div>';
   });
   if(p.dialyse) h+='<div class="ale ale-b"><span>💧</span><div><strong>Hémodialyse</strong> · '+p.seances_semaine+' séances/sem.</div></div>';
+  h+=lifelineM(p.id);
+  h+=trendsM(p.id);
   h+='<div class="card"><div class="ctit">👤 Mes informations</div><div class="igrid">';
   [["Naissance",p.dob],["Âge",(p.age||"?")+" ans"],["Groupe",p.groupe||"?"],["CIN",p.cin||"—"],["Téléphone",p.tel||"—"],["Ville",p.ville||"—"]].forEach(function(x){
     h+='<div class="ii"><div class="ilbl">'+x[0]+'</div><div class="ival">'+(x[1]||"—")+'</div></div>';

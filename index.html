@@ -2425,7 +2425,7 @@ function rDossier(){
       ${(["medecin","specialiste","admin"].includes(u.role)&&!p.userId)?`<button class="btn bp bsm" onclick="activerAccesMobile('${p.id}')">📱 Activer accès mobile</button>`:""}
       
       ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="showEditPatient('${p.id}')">✏️ Modifier</button>`:""}
-      ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="printBilanComplet('${p.id}')">🖨️ Bilan complet</button>`:""}
+      ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="printBilanComplet('${p.id}')">🖨️ Exporter PDF</button>`:""}
     </div>
     <div id="dossier-content"></div>`;
   renderDossierTab();
@@ -2433,6 +2433,92 @@ function rDossier(){
 
 function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===tab));renderDossierTab();}
 function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv}[dossierTab]||function(){})();}
+
+// ═══ v3 : Ligne de vie ECG + tendances graphiques ═══════════
+function _parseFRDate(s){
+  if(!s || typeof s !== "string") return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(!m) return null;
+  return new Date(+m[3], +m[2]-1, +m[1]);
+}
+
+function buildLifelineHtml(pid){
+  const now = new Date(); now.setHours(23,59,59,0);
+  const from = new Date(now.getTime() - 90*24*3600*1000);
+  const evts = [];
+  (DB.consultations[pid]||[]).forEach(c=>{const d=_parseFRDate(c.date);if(d&&d>=from&&d<=now)evts.push({d,t:"Consultation",tab:"consultations",warn:c.sc==="r"});});
+  (DB.labos[pid]||[]).forEach(l=>{const d=_parseFRDate(l.date);if(d&&d>=from&&d<=now)evts.push({d,t:"Bilan sanguin",tab:"labo",warn:(l.res||[]).some(r=>r.s==="bad")});});
+  (DB.imagerie[pid]||[]).forEach(i=>{const d=_parseFRDate(i.date);if(d&&d>=from&&d<=now)evts.push({d,t:i.type||"Imagerie",tab:"imagerie",warn:i.res&&i.res!=="Normal"});});
+  if(!evts.length) return "";
+  evts.sort((a,b)=>a.d-b.d);
+  const shown = evts.slice(-8); // les 8 plus récents
+  const span = now - from;
+  const pos = e => 6 + 88 * (e.d - from) / span; // 6%..94%
+
+  // Tracé ECG : ligne de base + un battement centré sur chaque événement
+  const W = 1000, H = 56, base = 28;
+  let pts = [[0,base]];
+  shown.forEach(e=>{
+    const x = pos(e)*10; // % → unités viewBox
+    pts.push([x-32,base],[x-20,base-17],[x-8,base+19],[x+2,base-10],[x+12,base],[x+24,base]);
+  });
+  pts.push([W,base]);
+  pts = pts.filter((p,i,a)=>i===0||p[0]>=a[i-1][0]); // monotone
+  const poly = pts.map(p=>p[0].toFixed(0)+","+p[1]).join(" ");
+
+  const dots = shown.map(e=>`
+    <div onclick="switchDossierTab('${e.tab}')" title="${e.t} · ${e.d.toLocaleDateString('fr-FR')}"
+      style="position:absolute;left:${pos(e).toFixed(1)}%;top:-25px;transform:translateX(-50%);text-align:center;cursor:pointer">
+      <div style="width:11px;height:11px;border-radius:50%;background:#fff;border:2.5px solid ${e.warn?"var(--red)":"var(--blue)"};margin:0 auto 4px"></div>
+      <div style="font-size:10px;font-weight:700;color:var(--g700);white-space:nowrap">${e.t}</div>
+      <div style="font-size:9.5px;color:var(--g400);font-family:monospace">${String(e.d.getDate()).padStart(2,"0")}/${String(e.d.getMonth()+1).padStart(2,"0")}</div>
+    </div>`).join("");
+
+  return `<div class="card" style="margin-bottom:14px;padding-bottom:40px">
+    <div class="ctit" style="margin-bottom:16px"><span class="ci">💓</span> Ligne de vie — 90 derniers jours</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
+      <polyline points="${poly}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" opacity=".8"/>
+    </svg>
+    <div style="position:relative;height:0">${dots}</div>
+  </div>`;
+}
+
+function buildTrendsHtml(pid){
+  const labos = (DB.labos[pid]||[]).map(l=>({d:_parseFRDate(l.date),res:l.res||[]})).filter(l=>l.d).sort((a,b)=>a.d-b.d);
+  if(labos.length < 2) return "";
+  const series = {};
+  labos.forEach(l=>l.res.forEach(r=>{
+    const v = parseFloat(String(r.v).replace(",",".").replace(/[^\d.\-]/g,""));
+    if(isNaN(v)) return;
+    if(!series[r.p]) series[r.p] = {u:r.u||"", pts:[]};
+    series[r.p].pts.push({v, s:r.s});
+  }));
+  const list = Object.entries(series).filter(([,s])=>s.pts.length>=2)
+    .map(([name,s])=>({name, u:s.u, pts:s.pts, last:s.pts[s.pts.length-1],
+      prio:{bad:2,warn:1}[s.pts[s.pts.length-1].s]||0}))
+    .sort((a,b)=>b.prio-a.prio || b.pts.length-a.pts.length)
+    .slice(0,6);
+  if(!list.length) return "";
+
+  const rows = list.map(t=>{
+    const vals = t.pts.map(p=>p.v);
+    const min = Math.min(...vals), max = Math.max(...vals), rng = (max-min)||1;
+    const sw = 64, sh = 20;
+    const line = t.pts.map((p,i)=>`${(i*sw/(t.pts.length-1)).toFixed(1)},${(sh-2-(p.v-min)/rng*(sh-4)).toFixed(1)}`).join(" ");
+    const bad = t.last.s==="bad";
+    const color = bad?"var(--red)":t.last.s==="warn"?"var(--amber)":"var(--blue)";
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--g200)">
+      <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</span>
+      <svg viewBox="0 0 ${sw} ${sh}" style="width:64px;height:20px;flex-shrink:0"><polyline points="${line}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span style="font-family:monospace;font-size:13px;font-weight:700;color:${bad?"var(--red)":"var(--g900)"};white-space:nowrap">${t.last.v} <span style="font-size:10px;color:var(--g400);font-weight:400">${t.u}</span></span>
+    </div>`;
+  }).join("");
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="ctit" style="margin-bottom:8px"><span class="ci">📈</span> Constantes suivies <span style="font-size:10.5px;color:var(--g400);font-weight:500;text-transform:none;letter-spacing:0">· évolution sur ${labos.length} bilans</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 28px">${rows}</div>
+  </div>`;
+}
 
 function dSynthese(){
   const p = DB.patients.find(x=>x.id===currentPatientId);
@@ -2544,9 +2630,13 @@ function dSynthese(){
     </div>`;
   }).join("");
 
+  const lifelineHtml = buildLifelineHtml(p.id);
+  const trendsHtml = buildTrendsHtml(p.id);
   G("dossier-content").innerHTML=`
     ${dialyseAlert||""}
     ${allergyAlerts}
+    ${lifelineHtml}
+    ${trendsHtml}
 
     <!-- Identité patient -->
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
