@@ -583,28 +583,48 @@ function lifelineM(pid){
   (DB.imagerie[pid]||[]).forEach(function(i){var d=_pFR(i.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Imagerie",tab:"img",w:i.res&&i.res!=="Normal"});});
   if(!evts.length) return "";
   evts.sort(function(a,b){return a.d-b.d;});
-  var shown = evts.slice(-5);
+  var shown = evts.slice(-8);
   var span = now - from;
-  function pos(e){ return 8 + 84 * (e.d - from) / span; }
+  function posOf(e){ return 8 + 84 * (e.d - from) / span; }
+
+  // Regrouper les événements trop proches (<9% de largeur)
+  var clusters = [];
+  shown.forEach(function(e){
+    var x = posOf(e);
+    var last = clusters[clusters.length-1];
+    if(last && (x - last.x) < 9){ last.items.push(e); last.x = x; }
+    else clusters.push({x:x, items:[e]});
+  });
 
   var W=1000, base=28, pts=[[0,base]];
-  shown.forEach(function(e){
-    var x = pos(e)*10;
+  clusters.forEach(function(c){
+    var x = c.x*10;
     pts.push([x-30,base],[x-18,base-16],[x-6,base+18],[x+4,base-9],[x+14,base],[x+26,base]);
   });
   pts.push([W,base]);
   pts = pts.filter(function(pt,i,a){return i===0||pt[0]>=a[i-1][0];});
   var poly = pts.map(function(pt){return pt[0].toFixed(0)+","+pt[1];}).join(" ");
 
-  var dots = shown.map(function(e){
-    return '<div onclick="var t=document.querySelector(\'.tab[data-t=\\\''+e.tab+'\\\']\');if(t)t.click();" '+
-      'style="position:absolute;left:'+pos(e).toFixed(1)+'%;top:-22px;transform:translateX(-50%);text-align:center">'+
-      '<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid '+(e.w?"#E53935":"var(--blue)")+';margin:0 auto 3px"></div>'+
-      '<div style="font-size:9px;font-weight:700;color:#44403C;white-space:nowrap">'+e.t+'</div>'+
-      '<div style="font-size:8.5px;color:#A8A29E;font-family:monospace">'+("0"+e.d.getDate()).slice(-2)+"/"+("0"+(e.d.getMonth()+1)).slice(-2)+'</div></div>';
+  function fmtD(d){ return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2); }
+
+  var dots = clusters.map(function(c,i){
+    var multi = c.items.length > 1;
+    var warn = c.items.some(function(e){return e.w;});
+    var tab = c.items[c.items.length-1].tab;
+    var label = multi ? c.items.length+" événements" : c.items[0].t;
+    var dlabel = multi ? fmtD(c.items[0].d)+"→"+fmtD(c.items[c.items.length-1].d) : fmtD(c.items[0].d);
+    var lvl = (i % 2 === 0) ? 0 : 30; // alternance des étiquettes sur 2 niveaux
+    var dot = multi
+      ? '<div style="min-width:16px;height:16px;border-radius:99px;background:'+(warn?"#E53935":"var(--blue)")+';color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 3px;padding:0 3px">'+c.items.length+'</div>'
+      : '<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid '+(warn?"#E53935":"var(--blue)")+';margin:0 auto 3px"></div>';
+    return '<div onclick="var t=document.querySelector(\'.tab[data-t=\\\''+tab+'\\\']\');if(t)t.click();" '+
+      'style="position:absolute;left:'+c.x.toFixed(1)+'%;top:'+(-24+(multi?-3:0))+'px;transform:translateX(-50%);text-align:center">'+dot+
+      '<div style="margin-top:'+lvl+'px;position:'+(lvl?"absolute":"static")+';left:50%;transform:'+(lvl?"translateX(-50%)":"none")+'">'+
+      '<div style="font-size:9px;font-weight:700;color:#44403C;white-space:nowrap">'+label+'</div>'+
+      '<div style="font-size:8.5px;color:#A8A29E;font-family:monospace;white-space:nowrap">'+dlabel+'</div></div></div>';
   }).join("");
 
-  return '<div class="card" style="padding-bottom:34px"><div class="ctit">💓 Ma ligne de vie · 90 jours</div>'+
+  return '<div class="card" style="padding-bottom:58px"><div class="ctit">💓 Ma ligne de vie · 90 jours</div>'+
     '<svg viewBox="0 0 '+W+' 56" preserveAspectRatio="none" style="width:100%;height:44px;display:block">'+
     '<polyline points="'+poly+'" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" opacity=".8"/></svg>'+
     '<div style="position:relative;height:0">'+dots+'</div></div>';
