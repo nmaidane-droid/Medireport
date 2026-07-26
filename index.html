@@ -945,11 +945,12 @@ function uShort(id){ const u=DB.users.find(x=>x.id===id); if(!u) return id; cons
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function uid(){ return "x"+Math.random().toString(36).slice(2,9); }
 function generatePIN(){
-  const usedPins = new Set((DB.users||[]).map(u=>u.pin).filter(Boolean));
-  let pin;
-  do { pin = Array.from({length:6},()=>Math.floor(Math.random()*10)).join(""); }
-  while(usedPins.has(pin));
-  return pin;
+  return Array.from({length:6},()=>Math.floor(Math.random()*10)).join("");
+}
+
+async function _hashPin(pin){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
 
 // ═══ SYSTÈME UX : toasts + confirmations stylées + spinner ═══
@@ -4644,7 +4645,7 @@ function rUsers(search=""){
       <td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.nom} ${u.prenom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td>
       <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
       <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
-      <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"—"}</span></td>
+      <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">••••••</span></td>
       <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
     </tr>`;
   }).join("");
@@ -4668,9 +4669,9 @@ function showAddUser(){
   const autoPin=generatePIN();
   G("nu-pin").value=autoPin;
   G("nu-pin-disp").textContent=autoPin;
-  ov.querySelector("#nu-s").onclick=()=>{const pr=G("nu-pr").value,nm=G("nu-nm").value;if(!pr||!nm){toast("Prénom et nom requis","warning");return;}const rl=G("nu-rl").value,ti=G("nu-ti").value;const initials=(pr[0]+(nm[0]||"")).toUpperCase();const colors=["#1A6EFF","#E53935","#0BA896","#F59E0B","#7C3AED","#16A34A"];const color=colors[DB.users.length%colors.length];const pinVal=G("nu-pin").value.trim()||generatePIN();const newU={id:uid(),prenom:pr,nom:nm,role:rl,titre:ti||undefined,spec:G("nu-sp").value,structure:G("nu-st").value,color,initials,pin:pinVal};DB.users.push(newU);if(rl==="patient"){const pid=uid();newU.patientId=pid;DB.patients.push({id:pid,nom:nm,prenom:pr,dob:"—",age:0,sexe:"M",tel:"—",email:"—",ville:"—",groupe:"—",allergies:[],antecedents:[],pathologies:[],medecin_ref:"",userId:newU.id,color,initials});DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];}saveDB(DB);ov.remove();rUsers();
+  ov.querySelector("#nu-s").onclick=async ()=>{const pr=G("nu-pr").value,nm=G("nu-nm").value;if(!pr||!nm){toast("Prénom et nom requis","warning");return;}const rl=G("nu-rl").value,ti=G("nu-ti").value;const initials=(pr[0]+(nm[0]||"")).toUpperCase();const colors=["#1A6EFF","#E53935","#0BA896","#F59E0B","#7C3AED","#16A34A"];const color=colors[DB.users.length%colors.length];const pinVal=G("nu-pin").value.trim()||generatePIN();const newU={id:uid(),prenom:pr,nom:nm,role:rl,titre:ti||undefined,spec:G("nu-sp").value,structure:G("nu-st").value,color,initials,pin:await _hashPin(pinVal)};DB.users.push(newU);if(rl==="patient"){const pid=uid();newU.patientId=pid;DB.patients.push({id:pid,nom:nm,prenom:pr,dob:"—",age:0,sexe:"M",tel:"—",email:"—",ville:"—",groupe:"—",allergies:[],antecedents:[],pathologies:[],medecin_ref:"",userId:newU.id,color,initials});DB.consultations[pid]=[];DB.labos[pid]=[];DB.rx[pid]=[];DB.imagerie[pid]=[];}saveDB(DB);ov.remove();rUsers();
     // Si patient : proposer d'imprimer la fiche d'accès
-    if(rl==="patient"){ setTimeout(async ()=>{ if(await confirmBox("Imprimer la fiche d\'accès pour "+pr+" "+nm+" ?", {title:"Fiche d\'accès patient", icon:"🖨", okLabel:"Imprimer", cancelLabel:"Plus tard"})){printFicheAcces(newU.id);} },300); }
+    if(rl==="patient"){ setTimeout(async ()=>{ if(await confirmBox("Imprimer la fiche d\'accès pour "+pr+" "+nm+" ? <br/><b>Le PIN ne sera plus jamais affiché ensuite.</b>", {title:"Fiche d\'accès patient", icon:"🖨", okLabel:"Imprimer", cancelLabel:"Plus tard"})){printFicheAcces(newU.id, pinVal);} },300); }
   };
 }
 
@@ -4680,13 +4681,13 @@ function showEditUser(uid2){
   ${(u.role==="specialiste"||u.role==="medecin")?`<div class="fg"><label>Autres lieux de consultation</label><div id="eu-addrs-list">${(u.adresses_sup||[]).map((a,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px"><input value="${a.lieu}" placeholder="Lieu (ex: Clinique Ibn Sina)" style="flex:1"/><input value="${a.adresse}" placeholder="Adresse" style="flex:2"/><button type="button" class="btn bd bsm" onclick="this.parentElement.remove()">✕</button></div>`).join("")}</div><button type="button" class="btn bs bsm" onclick="addAddrRow()">+ Ajouter un lieu</button></div>`:""}
   <div class="fg"><label>PIN (6 chiffres)</label>
   <div style="display:flex;gap:8px;align-items:center">
-    <input id="eu-pin" type="text" maxlength="6" value="${u.pin||''}" style="letter-spacing:8px;font-size:18px;text-align:center;flex:1"/>
+    <input id="eu-pin" type="text" maxlength="6" value="" placeholder="••••••" style="letter-spacing:8px;font-size:18px;text-align:center;flex:1"/>
     <button type="button" class="btn bs bsm" onclick="const p=generatePIN();document.getElementById('eu-pin').value=p;document.getElementById('eu-pin-disp').textContent='Nouveau PIN : '+p;" style="white-space:nowrap;background:#fff;border:1.5px solid var(--g200)">🎲 Régénérer</button>
   </div>
   <div id="eu-pin-disp" style="font-size:20px;font-weight:900;font-family:monospace;letter-spacing:8px;color:#fff;background:#000;padding:8px 16px;border-radius:8px;margin-top:6px;display:inline-block;min-width:140px;text-align:center"></div>
   <div style="font-size:11px;color:var(--g400);margin-top:3px">Communiquez le nouveau PIN à l'utilisateur</div>
 </div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="eu-s">Enregistrer</button></div></div>`);
-  ov.querySelector("#eu-s").onclick=()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin)u.pin=newPin;saveDB(DB,{table:"users",rows:[u]});ov.remove();rUsers();};
+  ov.querySelector("#eu-s").onclick=async ()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin){u.pin=await _hashPin(newPin);toast("Nouveau PIN : "+newPin+" — notez-le, il ne sera plus affiché","info");}saveDB(DB,{table:"users",rows:[u]});ov.remove();rUsers();};
 }
 async function delUser(uid2){const u=DB.users.find(x=>x.id===uid2);if(!await confirmBox(`${u?u.prenom+" "+u.nom:"Cet utilisateur"} perdra définitivement son accès à MediReport.`, {title:"Supprimer l'utilisateur ?", icon:"🗑", okLabel:"Supprimer", danger:true}))return;DB.users=DB.users.filter(x=>x.id!==uid2);DB.access=DB.access.filter(a=>a.userId!==uid2);saveDB(DB);rUsers();toast("Utilisateur supprimé","success");}
 
@@ -4944,7 +4945,7 @@ function rAdminUsers(search){
       <td><div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:${u.color}">${u.initials}</div><div><div style="font-weight:700">${titre}${u.nom} ${u.prenom}</div><div style="font-size:11px;color:var(--g400)">${u.spec||""}</div></div></div></td>
       <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
       <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
-      <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">${u.pin||"—"}</span></td>
+      <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">••••••</span></td>
       <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
     </tr>`;
   }).join("");
@@ -6366,7 +6367,7 @@ function activerAccesMobile(pid) {
   };
 }
 
-function _doActiverAccesMobile(pid) {
+async function _doActiverAccesMobile(pid) {
   const p = DB.patients.find(x=>x.id===pid);
   const pr = p.prenom, nm = p.nom;
   const newPin = generatePIN();
@@ -6375,7 +6376,7 @@ function _doActiverAccesMobile(pid) {
   const initials = (pr[0]+(nm[0]||"")).toUpperCase();
   const color = p.color || "#1A6EFF";
 
-  const newUser = {id:newUserId, prenom:pr, nom:nm, role:"patient", spec:"", structure:"", color, initials, pin:newPin, login:newLogin, patientId:pid};
+  const newUser = {id:newUserId, prenom:pr, nom:nm, role:"patient", spec:"", structure:"", color, initials, pin:await _hashPin(newPin), login:newLogin, patientId:pid};
   DB.users.push(newUser);
   p.userId = newUserId;
 
@@ -6532,13 +6533,13 @@ ${nextRdv ? `<div class="section">
   window.open(blobUrl, "_blank");
 }
 
-function printFicheAcces(userId){
+function printFicheAcces(userId, pinClair){
   const u = DB.users.find(x=>x.id===userId);
   if(!u||u.role!=="patient"){ toast("Utilisateur patient introuvable","error"); return; }
   const p = DB.patients.find(x=>x.id===u.patientId);
   const nom = `${u.prenom} ${u.nom}`;
   const login = u.login || userId;
-  const pin = u.pin || "000000";
+  const pin = pinClair || "(à régénérer)";
   const url = "https://medireport-kappa.vercel.app/mobile.html";
 
   // QR code generator (same as qr-patient.html)
