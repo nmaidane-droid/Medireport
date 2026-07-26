@@ -140,10 +140,13 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .dv-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .dv-tag{background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
 .dv-tag-red{background:rgba(229,57,53,.3)}
-.dv-tabs{display:flex;gap:2px;border-bottom:2px solid var(--g200);margin-bottom:18px;overflow-x:auto}
-.dv-tab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--g500);cursor:pointer;border-bottom:2px solid transparent;transition:var(--tr);white-space:nowrap;user-select:none;margin-bottom:-2px}
-.dv-tab.on{color:var(--blue);border-bottom-color:var(--blue);background:var(--blue-l);border-radius:6px 6px 0 0}
-.dv-tab:hover:not(.on){color:var(--g800);background:var(--g50);border-radius:6px 6px 0 0}
+.dv-tabs{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.dv-tab{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;font-weight:700;color:var(--g600);cursor:pointer;background:#fff;border:1.5px solid var(--g200);border-radius:12px;transition:var(--tr);white-space:nowrap;user-select:none;box-shadow:var(--shadow-sm)}
+.dv-tab-ico{font-size:15px;line-height:1}
+.dv-tab:hover:not(.on){border-color:var(--blue);color:var(--blue);background:var(--blue-l);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.dv-tab.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.30)}
+.dv-tab.on .dv-tab-ico{filter:grayscale(1) brightness(4)}
+.dv-tab:active{transform:scale(.97)}
 
 /* Table */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -2309,8 +2312,8 @@ function rDossier(){
   if(!p){G("pg-dossier").innerHTML=`<div style="padding:40px;text-align:center;color:var(--g400)">Sélectionnez un patient</div>`;return;}
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
-  const tabs=[{id:"overview",l:"Synthèse",show:true},{id:"consultations",l:"Consultations",show:canConsult},{id:"labo",l:"Laboratoire",show:canLabo},{id:"imagerie",l:"Imagerie",show:canImg},{id:"prescriptions",l:"Prescriptions",show:canRx},{id:"rdv",l:"Rendez-vous",show:true},{id:"acces_pat",l:"Accès",show:false}].filter(t=>t.show);
-  const tabsHtml=tabs.map(t=>`<div class="dv-tab${dossierTab===t.id?" on":""}" onclick="switchDossierTab('${t.id}')">${t.l}</div>`).join("");
+  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
+  const tabsHtml=tabs.map(t=>`<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}</div>`).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
     <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
@@ -2327,7 +2330,7 @@ function rDossier(){
   renderDossierTab();
 }
 
-function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.textContent===({overview:"Synthèse",consultations:"Consultations",labo:"Laboratoire",imagerie:"Imagerie",prescriptions:"Prescriptions",rdv:"Rendez-vous",acces_pat:"Accès"}[tab]||tab)));renderDossierTab();}
+function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===tab));renderDossierTab();}
 function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv}[dossierTab]||function(){})();}
 
 function dSynthese(){
