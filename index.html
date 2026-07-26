@@ -313,6 +313,12 @@ input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
+
+/* ═══ Badges non-lu ═══ */
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;margin-left:6px;background:var(--red);color:#fff;font-size:10px;font-weight:800;border-radius:99px;line-height:1}
+.dv-tab.on .tab-badge{background:#fff;color:var(--blue)}
+.unseen-dot{position:absolute;top:-2px;right:-2px;width:11px;height:11px;background:var(--teal);border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.unseen-item{border-left:3px solid var(--blue) !important;background:var(--blue-l) !important}
 </style>
 </head>
 <body>
@@ -599,18 +605,92 @@ async function markSeenSupabase(userId, itemId, itemType) {
 
 async function loadSeenSupabase(userId) {
   try {
-    const rows = await supaFetch("seen_items?user_id=eq."+userId+"&select=item_id,item_type");
+    const rows = await supaFetch("seen_items?user_id=eq."+userId+"&select=item_id,item_type,created_at");
     if (!rows) return;
     _seenCache[userId] = {};
     rows.forEach(r => {
+      if (r.item_type === "baseline") { _seenCache[userId]._baseline = r.created_at; return; }
       if (!_seenCache[userId][r.item_type]) _seenCache[userId][r.item_type] = [];
       _seenCache[userId][r.item_type].push(r.item_id);
     });
+    // Première utilisation du système de badges → tout l'historique est marqué vu
+    await ensureBaseline(userId);
   } catch(e) {}
 }
 
 function isSeen(userId, itemId, itemType) {
   return (_seenCache[userId]?.[itemType] || []).includes(itemId);
+}
+
+// ═══ BADGES NON-LU : moteur central ═══════════════════════
+// Un élément est "non lu" si : créé après la baseline de l'utilisateur,
+// pas encore vu (seen_items), et pas créé par l'utilisateur lui-même.
+
+async function ensureBaseline(userId){
+  // La baseline marque la date de 1re utilisation : tout l'historique antérieur = vu d'office
+  if (_seenCache[userId]?._baseline) return;
+  try {
+    await supaFetch("seen_items", {
+      method: "POST",
+      body: JSON.stringify({user_id: userId, item_id: "__baseline__", item_type: "baseline"})
+    });
+    if (!_seenCache[userId]) _seenCache[userId] = {};
+    _seenCache[userId]._baseline = new Date().toISOString();
+  } catch(e) {}
+}
+
+function _unseenItemsOfPatient(pid){
+  return {
+    el_consult: (DB.consultations[pid]||[]).map(c=>({id:c.id, author:c.dr, at:c.created_at})),
+    el_labo: (DB.labos[pid]||[]).map(l=>({id:l.id, author:l.labo, at:l.created_at})),
+    el_img: (DB.imagerie[pid]||[]).map(i=>({id:i.id, author:i.centre, at:i.created_at})),
+    el_rx: (DB.rx[pid]||[]).map(r=>({id:r.id, author:r.dr, at:r.created_at})),
+    el_rdv: (DB.rdv||[]).filter(r=>(r.patientId||r.patient_id)===pid).map(r=>({id:r.id, author:r.dr, at:r.created_at})),
+  };
+}
+
+function isUnseenItem(type, it){
+  const u = currentUser;
+  if (!u || !it.id) return false;
+  if (it.author === u.id) return false;            // jamais notifié de ses propres ajouts
+  if (!it.at) return false;                         // sans date fiable → considéré vu (prudence)
+  const base = _seenCache[u.id]?._baseline;
+  if (base && new Date(it.at) <= new Date(base)) return false; // antérieur à la 1re utilisation
+  return !isSeen(u.id, it.id, type);
+}
+
+function getUnseenCounts(pid){
+  const groups = _unseenItemsOfPatient(pid);
+  const res = {total: 0};
+  for (const type in groups){
+    const n = groups[type].filter(it=>isUnseenItem(type, it)).length;
+    res[type] = n; res.total += n;
+  }
+  return res;
+}
+
+async function markElementSeen(type, itemId){
+  const u = currentUser; if(!u) return;
+  if (isSeen(u.id, itemId, type)) return;
+  await markSeenSupabase(u.id, itemId, type);
+  updateTabBadges();
+  renderNotifBadge();
+}
+
+// Pastilles sur les onglets du dossier (mise à jour sans re-render)
+const _TAB_TYPE = {consultations:"el_consult", labo:"el_labo", imagerie:"el_img", prescriptions:"el_rx", rdv:"el_rdv"};
+function updateTabBadges(){
+  if(!currentPatientId) return;
+  const counts = getUnseenCounts(currentPatientId);
+  document.querySelectorAll(".dv-tab").forEach(t=>{
+    const type = _TAB_TYPE[t.dataset.tab];
+    let b = t.querySelector(".tab-badge");
+    const n = type ? (counts[type]||0) : 0;
+    if(n > 0){
+      if(!b){ b = document.createElement("span"); b.className = "tab-badge"; t.appendChild(b); }
+      b.textContent = n;
+    } else if(b){ b.remove(); }
+  });
 }
 
 
@@ -1282,10 +1362,31 @@ function getNotifications(){
   });
 
 
-  // Renouvellement supprimé — durée de traitement gérée directement sur l'ordonnance
-
-
-
+  // ═══ Éléments non lus dans les dossiers accessibles (cloche unifiée) ═══
+  const typeInfo = {
+    el_consult: {icon:"🩺", color:"var(--blue)", title:"Nouvelle consultation", tab:"consultations"},
+    el_labo:    {icon:"🧪", color:"var(--green)", title:"Nouveau résultat labo", tab:"labo"},
+    el_img:     {icon:"🔬", color:"var(--purple)", title:"Nouveau compte rendu d'imagerie", tab:"imagerie"},
+    el_rx:      {icon:"💊", color:"var(--amber)", title:"Nouvelle prescription", tab:"prescriptions"},
+    el_rdv:     {icon:"📅", color:"var(--teal)", title:"Nouveau rendez-vous", tab:"rdv"},
+  };
+  patients.forEach(p => {
+    const groups = _unseenItemsOfPatient(p.id);
+    for (const type in groups){
+      groups[type].forEach(it => {
+        if (!isUnseenItem(type, it)) return;
+        const ti = typeInfo[type];
+        const auteur = DB.users.find(x=>x.id===it.author);
+        notifs.push({
+          type, icon: ti.icon, color: ti.color, title: ti.title,
+          body: auteur ? "Par " + (auteur.titre?auteur.titre+" ":"") + auteur.prenom + " " + auteur.nom : "",
+          patientId: p.id, patient: p.prenom + " " + p.nom,
+          key: type + "_" + it.id,
+          action: () => { openDossier(p.id); setTimeout(()=>switchDossierTab(ti.tab), 150); }
+        });
+      });
+    }
+  });
 
 
 
@@ -2124,7 +2225,7 @@ function rDashboard(){
       ${myDemAvisDone.slice(0,5).map(d=>{const p=DB.patients.find(x=>x.id===d.patientId);return `<div class="ur"><div class="av" style="background:${p?.color||'#999'}">${p?.initials||'?'}</div><div style="flex:1"><div class="ur-name">${p?p.prenom+' '+p.nom:'—'}</div><div class="ur-meta">${d.ref} · ${d.date_traitement||d.date} · ${d.specialite}</div></div><span class="badge bgn">✓ Traité</span></div>`;}).join('')}
     </div>`:''}`;
   }
-  const recentHtml=patients.slice(0,5).map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color}">${p.initials}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans${p.cin?' · '+p.cin:''} · ${(p.pathologies||[]).join(", ")||"—"}</div></div><div style="display:flex;gap:6px;align-items:center">${p.allergies?.length?`<span class="badge br">⚠</span>`:""}${p.dialyse?`<span class="badge bt">💧</span>`:""}<span style="color:var(--g300)">›</span></div></div>`).join("")+
+  const recentHtml=patients.slice(0,5).map(p=>`<div class="ur" style="cursor:pointer" onclick="openDossier('${p.id}')"><div class="av" style="background:${p.color};position:relative">${p.initials}${getUnseenCounts(p.id).total?'<span class="unseen-dot"></span>':''}</div><div style="flex:1"><div class="ur-name">${p.prenom} ${p.nom}</div><div class="ur-meta">${p.age} ans${p.cin?' · '+p.cin:''} · ${(p.pathologies||[]).join(", ")||"—"}</div></div><div style="display:flex;gap:6px;align-items:center">${p.allergies?.length?`<span class="badge br">⚠</span>`:""}${p.dialyse?`<span class="badge bt">💧</span>`:""}<span style="color:var(--g300)">›</span></div></div>`).join("")+
     (patients.length>5?"":"");
   // Filter RDV for current week (Mon-Sun)
   const now = new Date();
@@ -2211,7 +2312,7 @@ function rPatients(){
     const rdvCount=DB.rdv.filter(r=>r.patientId===p.id).length;
     const canEdit = u.role==="admin" || p.medecin_ref===u.id;
     return `<div class="ur" style="cursor:pointer;padding:14px 16px" onclick="openDossier('${p.id}')">
-      <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
+      <div class="av" style="background:${p.color};flex-shrink:0;position:relative">${p.initials}${getUnseenCounts(p.id).total?'<span class="unseen-dot"></span>':''}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:15px;font-weight:800;color:var(--g900)">${p.prenom} ${p.nom}</div>
         <div style="font-size:12px;color:var(--g500);margin-top:2px">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · ${p.ville}${p.cin?' · <span style="font-family:monospace;font-size:11px">'+p.cin+'</span>':''}</div>
@@ -2263,7 +2364,7 @@ function filterPatients(q){
     const rdvCount=DB.rdv.filter(r=>r.patientId===p.id).length;
     const canEdit2 = u.role==="admin" || p.medecin_ref===u.id;
     return `<div class="ur" style="cursor:pointer;padding:14px 16px" onclick="openDossier('${p.id}')">
-      <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
+      <div class="av" style="background:${p.color};flex-shrink:0;position:relative">${p.initials}${getUnseenCounts(p.id).total?'<span class="unseen-dot"></span>':''}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:15px;font-weight:800;color:var(--g900)">${p.prenom} ${p.nom}</div>
         <div style="font-size:12px;color:var(--g500);margin-top:2px">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · ${p.ville}</div>
@@ -2313,7 +2414,7 @@ function rDossier(){
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
   const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
-  const tabsHtml=tabs.map(t=>`<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}</div>`).join("");
+  const _uc=getUnseenCounts(p.id);const tabsHtml=tabs.map(t=>{const n=_uc[{consultations:"el_consult",labo:"el_labo",imagerie:"el_img",prescriptions:"el_rx",rdv:"el_rdv"}[t.id]]||0;return `<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}${n?`<span class="tab-badge">${n}</span>`:""}</div>`;}).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
     <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
@@ -2520,7 +2621,8 @@ function showAllConsultations(pid){
   const html=cons.map(c=>{
     const isOphtalm = (c.spec||"").toLowerCase().includes("ophtalm");
     const ophBtn = isOphtalm && c.constantes ? `<button onclick="event.stopPropagation();printOrdonnanceLunettes('${c.id}','${p.id}')" style="background:#0BA896;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">👓 Ordonnance lunettes</button>` : "";
-    return `<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
+    const _new = isUnseenItem("el_consult", {id:c.id, author:c.dr, at:c.created_at});
+    return `<div class="card${_new?" unseen-item":""}" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
   }).join("");
   G("dossier-content").innerHTML=html||`<div class="card" style="text-align:center;padding:30px;color:var(--g400)">Aucune consultation</div>`;
 }
@@ -2532,7 +2634,8 @@ function dConsultations(){
   const html=consShown.map(c=>{
     const isOphtalm = (c.spec||"").toLowerCase().includes("ophtalm");
     const ophBtn = isOphtalm && c.constantes ? `<button onclick="event.stopPropagation();printOrdonnanceLunettes('${c.id}','${p.id}')" style="background:#0BA896;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">👓 Ordonnance lunettes</button>` : "";
-    return `<div class="card" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
+    const _new = isUnseenItem("el_consult", {id:c.id, author:c.dr, at:c.created_at});
+    return `<div class="card${_new?" unseen-item":""}" style="cursor:pointer;margin-bottom:12px" onclick="showConsultDetail('${c.id}','${p.id}')"><div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:14px;font-weight:800;color:var(--g900)">${uShort(c.dr)}</span>${bdg(c.spec,"bb")}${c.sc==="g"?bdg(c.statut,"bgn"):c.sc==="a"?bdg(c.statut,"ba"):bdg(c.statut,"br")}</div><div style="font-size:11px;color:var(--g400);margin-bottom:8px">📅 ${c.date} · ${c.motif}</div><div style="font-size:13px;color:var(--g600);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.cr}</div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags?.map(t=>bdg(t,"bgr")).join("")||""}</div>${ophBtn}</div><span style="color:var(--g300);font-size:18px">›</span></div></div>`;
   }).join("");
   // Show pending demandes
   const demLabo = (DB.demandes_labo||[]).filter(d=>d.patientId===p.id);
@@ -3434,6 +3537,7 @@ function updateSpecialisteList(pid){
 }
 
 function showConsultDetail(cid,pid){
+  markElementSeen("el_consult", cid);
   const c=(DB.consultations[pid]||[]).find(x=>x.id===cid);if(!c)return;
   const constLabels={ta:"TA",pouls:"Pouls",poids:"Poids",temp:"Temp.",spo2:"SpO2",fr:"FR"};
   const constUnits={ta:"mmHg",pouls:"bpm",poids:"kg",temp:"°C",spo2:"%",fr:"/min"};
@@ -4068,10 +4172,11 @@ function showAddConsult(pid){
 
 function dLabo(){
   const p=DB.patients.find(x=>x.id===currentPatientId);const u=currentUser;const canAdd=["laboratoire","medecin","admin","specialiste"].includes(u.role);const labos=sortByDate(DB.labos[p.id]||[], 'date', false);
-  const tabs=labos.map((l,i)=>`<div class="ltab" data-i="${i}" style="border:1.5px solid ${i===selLabo?"var(--blue)":"var(--g200)"};background:${i===selLabo?"var(--blue-l)":"var(--surface)"};cursor:pointer;transition:var(--tr)"><div style="font-size:12px;font-weight:800;color:${i===selLabo?"var(--blue)":"var(--g800)"}">${l.date}</div><div style="font-size:11px;color:var(--g500);margin-top:2px">${uName(l.labo)}</div><div style="font-size:11px;color:var(--g400)">${uShort(l.presc)}</div></div>`).join("");
+  const tabs=labos.map((l,i)=>{const _n=isUnseenItem("el_labo",{id:l.id,author:l.labo,at:l.created_at});return `<div class="ltab" data-i="${i}" style="border:1.5px solid ${i===selLabo?"var(--blue)":_n?"var(--teal)":"var(--g200)"};background:${i===selLabo?"var(--blue-l)":"var(--surface)"};cursor:pointer;transition:var(--tr)"><div style="font-size:12px;font-weight:800;color:${i===selLabo?"var(--blue)":"var(--g800)"}">${l.date}</div><div style="font-size:11px;color:var(--g500);margin-top:2px">${uName(l.labo)}</div><div style="font-size:11px;color:var(--g400)">${uShort(l.presc)}</div></div>`;}).join("");
   let resHtml="";
   if(labos.length){
-    const b=labos[selLabo];const nb=b.res.filter(r=>r.s==="bad").length,nw=b.res.filter(r=>r.s==="warn").length;
+    const b=labos[selLabo];
+    if(b) markElementSeen("el_labo", b.id);const nb=b.res.filter(r=>r.s==="bad").length,nw=b.res.filter(r=>r.s==="warn").length;
     const isNephro=p.dialyse||b.res.some(r=>r.cat);
     const catLabels={renal:"🫘 Fonction rénale",electro:"⚡ Électrolytes",nfs:"🩸 NFS & Anémie",mineral:"🦴 Bilan minéral & Osseux",nutrition:"🥗 Nutrition",inflam:"🔥 Inflammation",dialyse:"💧 Paramètres de dialyse"};
     let tableRows="";
@@ -4088,6 +4193,7 @@ function dLabo(){
 function showAddLabo(pid){const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Déposer des résultats biologiques</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fr"><div class="fg"><label>Laboratoire</label><input id="fl-l" placeholder="Nom du laboratoire"/></div><div class="fg"><label>Prescripteur</label><input id="fl-p" placeholder="Dr. Nom"/></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label style="margin:0">Paramètres</label><button class="btn bs bsm" id="fl-ap">+ Ligne</button></div><div id="fl-ps"><div style="display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr 1fr;gap:6px;margin-bottom:6px"><input placeholder="Paramètre"/><input placeholder="Valeur"/><input placeholder="Unité"/><input placeholder="Norme"/><select><option value="ok">Normal</option><option value="warn">Limite</option><option value="bad">Élevé</option></select></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="fl-save">Valider</button></div></div>`);ov.querySelector("#fl-ap").onclick=()=>{const d=document.createElement("div");d.style="display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr 1fr;gap:6px;margin-bottom:6px";d.innerHTML=`<input placeholder="Paramètre"/><input placeholder="Valeur"/><input placeholder="Unité"/><input placeholder="Norme"/><select><option value="ok">Normal</option><option value="warn">Limite</option><option value="bad">Élevé</option></select>`;ov.querySelector("#fl-ps").appendChild(d);};ov.querySelector("#fl-save").onclick=()=>{const rows=ov.querySelectorAll("#fl-ps > div"),res=[];rows.forEach(row=>{const ins=row.querySelectorAll("input");const sel=row.querySelector("select");if(ins[0].value)res.push({p:ins[0].value,v:ins[1].value,u:ins[2].value,n:ins[3].value,s:sel.value});});if(!DB.labos[pid])DB.labos[pid]=[];DB.labos[pid].unshift({id:uid(),patientId:pid,date:today(),labo:G("fl-l").value||currentUser.id,presc:G("fl-p").value||currentUser.id,res});saveDB(DB);selLabo=0;ov.remove();dLabo();};}
 
 function dImagerie(){
+  setTimeout(()=>{const g=_unseenItemsOfPatient(currentPatientId)["el_img"]||[];g.forEach(it=>{if(isUnseenItem("el_img",it))markElementSeen("el_img",it.id);});},600);
   const p = DB.patients.find(x=>x.id===currentPatientId);
   const imgs = sortByDate(DB.imagerie[p.id]||[], 'date', false);
   const isMed = ["medecin","specialiste","admin"].includes(currentUser.role);
@@ -4392,6 +4498,7 @@ function showStopRx(rxId, pid) {
 }
 
 function dRx(){
+  setTimeout(()=>{const g=_unseenItemsOfPatient(currentPatientId)["el_rx"]||[];g.forEach(it=>{if(isUnseenItem("el_rx",it))markElementSeen("el_rx",it.id);});},600);
   const p=DB.patients.find(x=>x.id===currentPatientId);const u=currentUser;const isMed=["medecin","specialiste","admin"].includes(u.role);
   const allergyAlerts=p.allergies?.map(a=>ale("d","Allergie — "+a,"Contre-indication absolue")).join("")||"";
   const rxs=DB.rx[p.id]||[];
@@ -4483,7 +4590,8 @@ function showAddRx(pid){
   };
 }
 
-function dRdv(){const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=(()=>{
+function dRdv(){
+  setTimeout(()=>{const g=_unseenItemsOfPatient(currentPatientId)["el_rdv"]||[];g.forEach(it=>{if(isUnseenItem("el_rdv",it))markElementSeen("el_rdv",it.id);});},600);const p=DB.patients.find(x=>x.id===currentPatientId);const rdvs=(()=>{
   const months={Jan:0,Janv:0,Fév:1,Mar:2,Mars:2,Avr:3,Mai:4,Jun:5,Juin:5,Jul:6,Juil:6,Aoû:7,Août:7,Sep:8,Sept:8,Oct:9,Nov:10,Déc:11};
   const now=new Date();
   const today=new Date(); today.setHours(0,0,0,0);
@@ -5215,7 +5323,7 @@ function showAddPatient(){
         const hasAccess=DB.access.some(a=>a.patientId===p.id&&a.userId===currentUser.id)||p.medecin_ref===currentUser.id;
         const isPending=(DB.demandes_acces||[]).some(d=>d.patient_id===p.id&&d.demandeur_id===currentUser.id&&d.statut==="en_attente");
         return `<div style="background:#fff;border:1.5px solid var(--g200);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-          <div class="av" style="background:${p.color};flex-shrink:0">${p.initials}</div>
+          <div class="av" style="background:${p.color};flex-shrink:0;position:relative">${p.initials}${getUnseenCounts(p.id).total?'<span class="unseen-dot"></span>':''}</div>
           <div style="flex:1">
             <div style="font-weight:800;font-size:14px">${p.prenom} ${p.nom}</div>
             <div style="font-size:12px;color:var(--g500)">${p.dob||"—"} · ${p.cin||"CIN non renseigné"} · ${p.ville||"—"}</div>
