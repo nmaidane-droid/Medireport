@@ -18,7 +18,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif
 :root{--blue:#0F766E;--blue-l:#F0FDFA;--blue-d:#115E59;--green:#16A34A;--green-l:#F0FDF4;--red:#E53935;--red-l:#FDECEA;--amber:#D97706;--amber-l:#FEF3C7;--g50:#FAFAF9;--g100:#F5F5F4;--g200:#E7E5E4;--g400:#A8A29E;--g500:#78716C;--g700:#44403C;--g900:#1C1917;--shadow-sm:0 1px 2px rgba(28,25,23,.04),0 2px 8px rgba(28,25,23,.04);--shadow-md:0 2px 4px rgba(28,25,23,.04),0 8px 24px rgba(28,25,23,.07)}
 
 /* LOGIN */
-#ls{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 16px;background:linear-gradient(160deg,#F7F6F3 0%,#EDF7F5 55%,#E4F3F0 100%);overflow-y:auto}
+#ls{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 16px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%230F766E' stroke-width='1' opacity='0.05'%3E%3Crect x='16' y='16' width='24' height='24'/%3E%3Crect x='16' y='16' width='24' height='24' transform='rotate(45 28 28)'/%3E%3Ccircle cx='28' cy='28' r='4.5'/%3E%3C/g%3E%3C/svg%3E"),linear-gradient(160deg,#F7F6F3 0%,#EDF7F5 55%,#E4F3F0 100%);overflow-y:auto}
 .l-ico{width:64px;height:64px;border-radius:18px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;margin:20px auto 10px;box-shadow:none}
 .l-tit{font-size:22px;font-weight:900;color:#0F172A;text-align:center;letter-spacing:-1px;margin-bottom:4px}
 .l-sub{font-size:13px;color:#64748B;text-align:center;margin-bottom:20px}
@@ -38,7 +38,7 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 
 /* APP */
 #app{display:none;height:100vh;height:100dvh;flex-direction:column;overflow:hidden}
-.hdr{background:linear-gradient(135deg,var(--blue),var(--blue-d));padding:16px 16px 20px;color:#fff}
+.hdr{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='white' stroke-width='1' opacity='0.07'%3E%3Crect x='16' y='16' width='24' height='24'/%3E%3Crect x='16' y='16' width='24' height='24' transform='rotate(45 28 28)'/%3E%3Ccircle cx='28' cy='28' r='4.5'/%3E%3C/g%3E%3C/svg%3E"),linear-gradient(135deg,var(--blue),var(--blue-d));padding:16px 16px 20px;color:#fff}
 .hdr-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .hdr-logo{font-size:15px;font-weight:800;color:#fff}
 .h-out{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -118,6 +118,9 @@ button{font-family:inherit}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
 .tab-dot{position:absolute;top:2px;right:calc(50% - 18px);min-width:15px;height:15px;padding:0 3px;background:#E53935;color:#fff;font-size:9px;font-weight:800;border-radius:99px;display:flex;align-items:center;justify-content:center;line-height:1;border:1.5px solid #fff}
+
+#ls::after{content:"🇲🇦 Conçu au Maroc";position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:600;color:#78716C;letter-spacing:.3px}
+#ls{position:relative}
 </style>
 </head>
 <body>
@@ -574,62 +577,6 @@ function _pFR(s){
   return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
 }
 
-function lifelineM(pid){
-  var now = new Date(); now.setHours(23,59,59,0);
-  var from = new Date(now.getTime() - 90*24*3600*1000);
-  var evts = [];
-  (DB.consultations[pid]||[]).forEach(function(c){var d=_pFR(c.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Consult.",tab:"con",w:false});});
-  (DB.labos[pid]||[]).forEach(function(l){var d=_pFR(l.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Bilan",tab:"lab",w:(l.res||[]).some(function(r){return r.s==="bad";})});});
-  (DB.imagerie[pid]||[]).forEach(function(i){var d=_pFR(i.date);if(d&&d>=from&&d<=now)evts.push({d:d,t:"Imagerie",tab:"img",w:i.res&&i.res!=="Normal"});});
-  if(!evts.length) return "";
-  evts.sort(function(a,b){return a.d-b.d;});
-  var shown = evts.slice(-8);
-  var span = now - from;
-  function posOf(e){ return 8 + 84 * (e.d - from) / span; }
-
-  // Regrouper les événements trop proches (<9% de largeur)
-  var clusters = [];
-  shown.forEach(function(e){
-    var x = posOf(e);
-    var last = clusters[clusters.length-1];
-    if(last && (x - last.x) < 9){ last.items.push(e); last.x = x; }
-    else clusters.push({x:x, items:[e]});
-  });
-
-  var W=1000, base=28, pts=[[0,base]];
-  clusters.forEach(function(c){
-    var x = c.x*10;
-    pts.push([x-30,base],[x-18,base-16],[x-6,base+18],[x+4,base-9],[x+14,base],[x+26,base]);
-  });
-  pts.push([W,base]);
-  pts = pts.filter(function(pt,i,a){return i===0||pt[0]>=a[i-1][0];});
-  var poly = pts.map(function(pt){return pt[0].toFixed(0)+","+pt[1];}).join(" ");
-
-  function fmtD(d){ return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2); }
-
-  var dots = clusters.map(function(c,i){
-    var multi = c.items.length > 1;
-    var warn = c.items.some(function(e){return e.w;});
-    var tab = c.items[c.items.length-1].tab;
-    var label = multi ? c.items.length+" événements" : c.items[0].t;
-    var dlabel = multi ? fmtD(c.items[0].d)+"→"+fmtD(c.items[c.items.length-1].d) : fmtD(c.items[0].d);
-    var lvl = (i % 2 === 0) ? 0 : 30; // alternance des étiquettes sur 2 niveaux
-    var dot = multi
-      ? '<div style="min-width:16px;height:16px;border-radius:99px;background:'+(warn?"#E53935":"var(--blue)")+';color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 3px;padding:0 3px">'+c.items.length+'</div>'
-      : '<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid '+(warn?"#E53935":"var(--blue)")+';margin:0 auto 3px"></div>';
-    return '<div onclick="var t=document.querySelector(\'.tab[data-t=\\\''+tab+'\\\']\');if(t)t.click();" '+
-      'style="position:absolute;left:'+c.x.toFixed(1)+'%;top:'+(-24+(multi?-3:0))+'px;transform:translateX(-50%);text-align:center">'+dot+
-      '<div style="margin-top:'+lvl+'px;position:'+(lvl?"absolute":"static")+';left:50%;transform:'+(lvl?"translateX(-50%)":"none")+'">'+
-      '<div style="font-size:9px;font-weight:700;color:#44403C;white-space:nowrap">'+label+'</div>'+
-      '<div style="font-size:8.5px;color:#A8A29E;font-family:monospace;white-space:nowrap">'+dlabel+'</div></div></div>';
-  }).join("");
-
-  return '<div class="card" style="padding-bottom:58px"><div class="ctit">💓 Ma ligne de vie · 90 jours</div>'+
-    '<svg viewBox="0 0 '+W+' 56" preserveAspectRatio="none" style="width:100%;height:44px;display:block">'+
-    '<polyline points="'+poly+'" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" opacity=".8"/></svg>'+
-    '<div style="position:relative;height:0">'+dots+'</div></div>';
-}
-
 function trendsM(pid){
   var labos = (DB.labos[pid]||[]).map(function(l){return {d:_pFR(l.date),res:l.res||[]};})
     .filter(function(l){return l.d;}).sort(function(a,b){return a.d-b.d;});
@@ -692,7 +639,6 @@ function tabSyn() {
     h+='<div class="ale ale-r"><span>⚠️</span><div><strong>Allergie :</strong> '+a+'</div></div>';
   });
   if(p.dialyse) h+='<div class="ale ale-b"><span>💧</span><div><strong>Hémodialyse</strong> · '+p.seances_semaine+' séances/sem.</div></div>';
-  h+=lifelineM(p.id);
   h+=trendsM(p.id);
   h+='<div class="card"><div class="ctit">👤 Mes informations</div><div class="igrid">';
   [["Naissance",p.dob],["Âge",(p.age||"?")+" ans"],["Groupe",p.groupe||"?"],["CIN",p.cin||"—"],["Téléphone",p.tel||"—"],["Ville",p.ville||"—"]].forEach(function(x){
@@ -1191,7 +1137,7 @@ function printBilanMobile() {
       +'<div style="font-size:10px;color:#64748B">'+(nextRdv.motif||"")+'</div></div>';
   }
 
-  html += '<div class="footer">MediReport · Document confidentiel · Usage médical uniquement · '+todayStr+'</div>';
+  html += '<div class="footer">MediReport · 🇲🇦 Conçu au Maroc · Document confidentiel · Usage médical uniquement · '+todayStr+'</div>';
   html += '</body></html>';
 
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
