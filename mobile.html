@@ -303,6 +303,13 @@ function login() {
 // ── ACCÈS SÉCURISÉ VIA PROXY /api/db ─────────────────────────
 var TOKEN = null;
 
+function _xssClean(v){
+  if (typeof v === "string") return v.replace(/<(?=[a-zA-Z\/!])/g, "&lt;");
+  if (Array.isArray(v)) return v.map(_xssClean);
+  if (v && typeof v === "object"){ var o={}; for (var k in v) o[k]=_xssClean(v[k]); return o; }
+  return v;
+}
+
 function supaGet(path, cb) {
   fetch("/api/db", {
     method: "POST",
@@ -311,7 +318,7 @@ function supaGet(path, cb) {
   }).then(function(r){
     if (r.status === 401) { logout(); return null; }
     return r.json();
-  }).then(cb).catch(function(){ cb(null); });
+  }).then(function(data){ cb(_xssClean(data)); }).catch(function(){ cb(null); });
 }
 
 function startRealtimeMobile() {
