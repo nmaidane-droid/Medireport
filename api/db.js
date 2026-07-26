@@ -75,8 +75,9 @@ export default async function handler(req) {
       if (!myPatientId) return json({ error: 'Accès refusé' }, 403);
       effectivePath = effectivePath + sep + 'id=eq.' + encodeURIComponent(myPatientId);
     } else if (table === 'users') {
-      // Un patient ne peut lire que son propre compte
-      effectivePath = effectivePath + sep + 'id=eq.' + encodeURIComponent(myUserId);
+      // Annuaire des professionnels : colonnes publiques UNIQUEMENT (select forcé,
+      // le client ne peut pas demander pin/login/patient_id)
+      effectivePath = 'users?select=id,prenom,nom,titre,spec,structure,role,color,initials';
     } else if (table === 'seen_items' || table === 'notifications_vues') {
       if (method === 'GET') effectivePath = effectivePath + sep + 'user_id=eq.' + encodeURIComponent(myUserId);
     }
