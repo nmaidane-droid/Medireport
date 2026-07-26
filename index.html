@@ -5,23 +5,30 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>MediReport Pro — Gestion Multi-Utilisateurs</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='white' stroke='%231a1a2e' stroke-width='6'/><polyline points='2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50' fill='none' stroke='%23E8001C' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --blue:#1A6EFF;--blue-l:#EAF1FF;--blue-d:#0D4DB3;
+  /* ── Thème Premium Médical : teal profond + neutres chauds ── */
+  --blue:#0F766E;--blue-l:#F0FDFA;--blue-d:#115E59;
   --teal:#0BA896;--teal-l:#E6F6F5;
   --red:#E53935;--red-l:#FDECEA;
-  --amber:#F59E0B;--amber-l:#FEF3C7;
+  --amber:#D97706;--amber-l:#FEF3C7;
   --green:#16A34A;--green-l:#F0FDF4;
   --purple:#7C3AED;--purple-l:#F5F3FF;
-  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;
-  --g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;
-  --g800:#1E293B;--g900:#0F172A;
-  --surface:#FFFFFF;--bg:#F1F5F9;
-  --r:8px;--rL:12px;--tr:all .15s ease;
-  --sb:260px;
+  --g50:#FAFAF9;--g100:#F5F5F4;--g200:#E7E5E4;--g300:#D6D3D1;
+  --g400:#A8A29E;--g500:#78716C;--g600:#57534E;--g700:#44403C;
+  --g800:#292524;--g900:#1C1917;
+  --surface:#FFFFFF;--bg:#F7F6F3;
+  --r:12px;--rL:16px;--tr:all .18s cubic-bezier(.4,0,.2,1);
+  --sb:264px;
+  --shadow-sm:0 1px 2px rgba(28,25,23,.04),0 2px 8px rgba(28,25,23,.04);
+  --shadow-md:0 2px 4px rgba(28,25,23,.04),0 8px 24px rgba(28,25,23,.07);
+  --shadow-lg:0 4px 8px rgba(28,25,23,.06),0 16px 48px rgba(28,25,23,.12);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--g800);font-size:14px;line-height:1.5;height:100vh;overflow:hidden}
+body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--g800);font-size:14px;line-height:1.55;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
 
 /* ══ LAYOUT ══ */
 .scr{display:none;width:100%;height:100vh}
@@ -31,7 +38,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* ══ SIDEBAR ══ */
 .sb{width:var(--sb);background:#fff;border-right:1.5px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0;height:100vh;overflow:hidden}
 .sb-logo{padding:16px 18px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--g200);flex-shrink:0}
-.sb-li{width:34px;height:34px;border-radius:9px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(26,110,255,.3)}
+.sb-li{width:34px;height:34px;border-radius:9px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(15,118,110,.3)}
 .sb-user{padding:10px 14px;margin:8px;background:var(--g50);border:1px solid var(--g200);border-radius:var(--r);flex-shrink:0}
 .sb-un{font-size:13px;font-weight:700;color:#1a1a2e}
 .sb-um{font-size:11px;color:#555;margin-top:1px}
@@ -39,7 +46,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sb-nav-scroll{flex:1;overflow-y:auto;padding:4px 0}
 .ni{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:7px;margin:2px 8px;color:var(--g700);font-size:13px;font-weight:600;cursor:pointer;transition:var(--tr);user-select:none}
 .ni:hover{background:var(--blue-l);color:var(--blue);transform:translateX(2px)}
-.ni.on{background:var(--blue);color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(26,110,255,.25)}
+.ni.on{background:var(--blue);color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(15,118,110,.25)}
 .ni-ico{font-size:16px;width:20px;text-align:center;flex-shrink:0}
 
 /* ══ MAIN ══ */
@@ -47,7 +54,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tb{height:54px;background:var(--surface);border-bottom:1.5px solid var(--g200);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .tb-title{font-size:17px;font-weight:800;color:var(--g900);flex:1}
 .sw{display:flex;align-items:center;gap:8px;background:var(--g50);border:1.5px solid var(--g200);border-radius:8px;padding:7px 14px;width:320px;transition:var(--tr)}
-.sw:focus-within{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(26,110,255,.1)}
+.sw:focus-within{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(15,118,110,.1)}
 .sw input{border:none;background:none;outline:none;font-size:13px;color:var(--g800);width:100%}
 .ct{flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg)}
 .pg{display:none}.pg.on{display:block}
@@ -67,7 +74,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Stats */
 .stat{background:var(--surface);border:1px solid var(--g200);border-radius:var(--rL);padding:16px 18px;transition:var(--tr)}
-.stat:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,110,255,.08)}
+.stat:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(15,118,110,.08)}
 .sl{font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .sv{font-size:28px;font-weight:900;color:var(--g900);line-height:1}
 .ss{font-size:11px;color:var(--g500);margin-top:4px}
@@ -76,7 +83,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r);font-size:13px;font-weight:700;cursor:pointer;border:none;transition:var(--tr);font-family:inherit;user-select:none;white-space:nowrap}
 .btn:hover{filter:brightness(1.05)}
 .btn:active{transform:scale(.97)}
-.bp{background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(26,110,255,.3)}
+.bp{background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(15,118,110,.3)}
 .bp:hover{background:var(--blue-d)}
 .bs{background:var(--g100);color:var(--g700);border:1px solid var(--g200)}
 .bs:hover{background:var(--g200)}
@@ -92,7 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .fg{margin-bottom:12px}
 .fg label{display:block;font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
 input,textarea,select{width:100%;padding:9px 12px;border:1.5px solid var(--g200);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--g900);outline:none;transition:var(--tr)}
-input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(26,110,255,.1)}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(15,118,110,.1)}
 input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -118,7 +125,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 
 /* Patient cards */
 .pc{background:var(--surface);border:1px solid var(--g200);border-radius:var(--rL);padding:16px;cursor:pointer;transition:var(--tr);display:flex;flex-direction:column;gap:10px}
-.pc:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(26,110,255,.1);transform:translateY(-2px)}
+.pc:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(15,118,110,.1);transform:translateY(-2px)}
 .pc-top{display:flex;align-items:center;gap:12px}
 .pc-name{font-size:14px;font-weight:800;color:var(--g900)}
 .pc-meta{font-size:12px;color:var(--g500);margin-top:1px}
@@ -133,10 +140,13 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .dv-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .dv-tag{background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
 .dv-tag-red{background:rgba(229,57,53,.3)}
-.dv-tabs{display:flex;gap:2px;border-bottom:2px solid var(--g200);margin-bottom:18px;overflow-x:auto}
-.dv-tab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--g500);cursor:pointer;border-bottom:2px solid transparent;transition:var(--tr);white-space:nowrap;user-select:none;margin-bottom:-2px}
-.dv-tab.on{color:var(--blue);border-bottom-color:var(--blue);background:var(--blue-l);border-radius:6px 6px 0 0}
-.dv-tab:hover:not(.on){color:var(--g800);background:var(--g50);border-radius:6px 6px 0 0}
+.dv-tabs{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.dv-tab{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;font-weight:700;color:var(--g600);cursor:pointer;background:#fff;border:1.5px solid var(--g200);border-radius:12px;transition:var(--tr);white-space:nowrap;user-select:none;box-shadow:var(--shadow-sm)}
+.dv-tab-ico{font-size:15px;line-height:1}
+.dv-tab:hover:not(.on){border-color:var(--blue);color:var(--blue);background:var(--blue-l);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.dv-tab.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.30)}
+.dv-tab.on .dv-tab-ico{filter:grayscale(1) brightness(4)}
+.dv-tab:active{transform:scale(.97)}
 
 /* Table */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -172,7 +182,7 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 
 /* RDV */
 .rdvi{display:flex;gap:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--g200);border-radius:var(--rL);margin-bottom:10px;align-items:flex-start;transition:var(--tr)}
-.rdvi:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(26,110,255,.08)}
+.rdvi:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(15,118,110,.08)}
 .rdvd{width:52px;height:52px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
 .rdvday{font-size:20px;font-weight:900;line-height:1}
 .rdvmo{font-size:10px;opacity:.8;text-transform:uppercase}
@@ -229,22 +239,80 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .upick-empty{padding:30px;text-align:center;color:var(--g400);font-size:13px}
 
 /* Login */
-#ls{align-items:center;justify-content:center;background:linear-gradient(135deg,#f0f4f8 0%,#e8edf5 100%);padding:40px 20px;overflow-y:hidden;flex-direction:column;gap:32px}
+#ls{align-items:center;justify-content:center;background:linear-gradient(160deg,#F7F6F3 0%,#EDF7F5 55%,#E4F3F0 100%);padding:40px 20px;overflow-y:hidden;flex-direction:column;gap:32px}
 .ls-logo{display:flex;align-items:center;gap:16px}
-.ls-ico{width:64px;height:64px;border-radius:18px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;box-shadow:0 6px 20px rgba(26,110,255,.4)}
+.ls-ico{width:64px;height:64px;border-radius:18px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;box-shadow:0 6px 20px rgba(15,118,110,.4)}
 .ls-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:16px;width:100%;max-width:900px}
 .ls-card{background:#fff;border:2px solid var(--g200);border-radius:20px;padding:36px 16px 28px;cursor:pointer;transition:var(--tr);text-align:center;position:relative;user-select:none;box-shadow:0 4px 16px rgba(0,0,0,.06)}
-.ls-card:hover{border-color:var(--blue);background:var(--blue-l);transform:translateY(-5px);box-shadow:0 12px 32px rgba(26,110,255,.2)}
-.ls-card.sel{border-color:var(--blue);background:var(--blue-l);box-shadow:0 0 0 4px rgba(26,110,255,.15)}
+.ls-card:hover{border-color:var(--blue);background:var(--blue-l);transform:translateY(-5px);box-shadow:0 12px 32px rgba(15,118,110,.2)}
+.ls-card.sel{border-color:var(--blue);background:var(--blue-l);box-shadow:0 0 0 4px rgba(15,118,110,.15)}
 .ls-card-ico{font-size:52px;display:block;margin-bottom:14px}
 .ls-card-name{font-size:14px;font-weight:700;color:var(--g700);line-height:1.4}
 .ls-card.sel .ls-card-name{color:var(--blue)}
 .ls-card-badge{position:absolute;top:10px;left:10px;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px}
-.ls-btn{padding:13px 40px;border-radius:var(--r);background:var(--blue);color:#fff;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:var(--tr);box-shadow:0 4px 14px rgba(26,110,255,.3)}
+.ls-btn{padding:13px 40px;border-radius:var(--r);background:var(--blue);color:#fff;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:var(--tr);box-shadow:0 4px 14px rgba(15,118,110,.3)}
 .ls-btn:hover{background:var(--blue-d);transform:translateY(-1px)}
 .ls-note{margin-top:0;font-size:12px;color:var(--g400)}
 @keyframes toastIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════ THÈME PREMIUM MÉDICAL — surcharges ═══════════ */
+
+/* Cartes : ombres douces multi-couches, plus de respiration */
+.card{border-color:var(--g100);border-radius:var(--rL);padding:20px 22px;box-shadow:var(--shadow-sm)}
+.card:hover{box-shadow:var(--shadow-md)}
+
+/* Sidebar : blanche épurée, item actif en pill teal pleine */
+.sb{border-right:1px solid var(--g100);box-shadow:1px 0 0 rgba(28,25,23,.02)}
+.ni{border-radius:10px;padding:10px 14px;margin:2px 10px;font-weight:600}
+.ni:hover{background:var(--g50)}
+.ni.on{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(15,118,110,.28)}
+.ni.on .ni-ico{filter:grayscale(1) brightness(3)}
+
+/* Boutons : plus généreux, primaire teal avec ombre portée colorée */
+.btn{border-radius:10px;padding:9px 18px;font-weight:700;letter-spacing:.1px}
+.btn.bp{background:var(--blue);box-shadow:0 2px 8px rgba(15,118,110,.25)}
+.btn.bp:hover{background:var(--blue-d);box-shadow:0 4px 14px rgba(15,118,110,.32);transform:translateY(-1px)}
+.btn.bs{border:1.5px solid var(--g200);background:#fff}
+.btn.bs:hover{border-color:var(--g300);background:var(--g50)}
+.btn.bd:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.98)}
+
+/* Champs : focus ring teal doux */
+input,textarea,select{border-radius:10px;padding:10px 13px;border-color:var(--g200)}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(15,118,110,.10)}
+
+/* Tableaux : aérés, en-têtes discrets, hover teal très léger */
+.tbl th{background:transparent;border-bottom:1.5px solid var(--g200);padding:12px 14px;letter-spacing:.6px;font-size:10.5px}
+.tbl td{padding:13px 14px}
+.tbl tbody tr:hover{background:var(--blue-l)}
+
+/* Badges : plus doux */
+.badge{padding:4px 11px;font-weight:700;letter-spacing:.1px}
+
+/* Avatars : anneau blanc + ombre légère */
+.av{box-shadow:0 0 0 2.5px #fff,0 2px 6px rgba(28,25,23,.12)}
+
+/* Modales : grands arrondis, ombre profonde, fond flouté */
+.mov{background:rgba(28,25,23,.4);backdrop-filter:blur(6px)}
+.mb{border-radius:20px;box-shadow:var(--shadow-lg);border:1px solid var(--g100)}
+
+/* En-têtes de page */
+.sec-tit{font-weight:800;letter-spacing:-.3px}
+
+/* Scrollbars fines et discrètes */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--g200);border-radius:99px;border:2.5px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--g300)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* Focus clavier visible (accessibilité) */
+.btn:focus-visible,.ni:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px}
+
+/* Réduction de mouvement respectée */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
 </style>
 </head>
 <body>
@@ -962,7 +1030,7 @@ function toast(msg, type="success"){
     c.style.cssText = "position:fixed;top:16px;right:16px;z-index:10001;display:flex;flex-direction:column;gap:8px;max-width:min(360px,90vw)";
     document.body.appendChild(c);
   }
-  const colors = { success:["#F0FDF4","#BBF7D0","#16A34A","✅"], error:["#FEF2F2","#FECACA","#DC2626","❌"], info:["#EFF6FF","#BFDBFE","#1A6EFF","ℹ️"], warning:["#FFFBEB","#FDE68A","#D97706","⚠️"] };
+  const colors = { success:["#F0FDF4","#BBF7D0","#16A34A","✅"], error:["#FEF2F2","#FECACA","#DC2626","❌"], info:["#F0FDFA","#99F6E4","#0F766E","ℹ️"], warning:["#FFFBEB","#FDE68A","#D97706","⚠️"] };
   const [bg, border, color, icon] = colors[type] || colors.info;
   const t = document.createElement("div");
   t.style.cssText = `background:${bg};border:1.5px solid ${border};color:${color};padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;animation:toastIn .25s ease;cursor:pointer`;
@@ -2244,8 +2312,8 @@ function rDossier(){
   if(!p){G("pg-dossier").innerHTML=`<div style="padding:40px;text-align:center;color:var(--g400)">Sélectionnez un patient</div>`;return;}
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
-  const tabs=[{id:"overview",l:"Synthèse",show:true},{id:"consultations",l:"Consultations",show:canConsult},{id:"labo",l:"Laboratoire",show:canLabo},{id:"imagerie",l:"Imagerie",show:canImg},{id:"prescriptions",l:"Prescriptions",show:canRx},{id:"rdv",l:"Rendez-vous",show:true},{id:"acces_pat",l:"Accès",show:false}].filter(t=>t.show);
-  const tabsHtml=tabs.map(t=>`<div class="dv-tab${dossierTab===t.id?" on":""}" onclick="switchDossierTab('${t.id}')">${t.l}</div>`).join("");
+  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
+  const tabsHtml=tabs.map(t=>`<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}</div>`).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
     <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
@@ -2262,7 +2330,7 @@ function rDossier(){
   renderDossierTab();
 }
 
-function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.textContent===({overview:"Synthèse",consultations:"Consultations",labo:"Laboratoire",imagerie:"Imagerie",prescriptions:"Prescriptions",rdv:"Rendez-vous",acces_pat:"Accès"}[tab]||tab)));renderDossierTab();}
+function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===tab));renderDossierTab();}
 function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv}[dossierTab]||function(){})();}
 
 function dSynthese(){
@@ -6267,25 +6335,33 @@ function showPartenaires(){
 //  SESSION TIMEOUT — déconnexion après 15 min d'inactivité
 // ══════════════════════════════════════════════════════════
 let sessionTimer = null;
+let warnTimer = null;
+let countdownInterval = null;
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes
-let warningShown = false;
+let _lastReset = 0;
 
 function resetSessionTimer(){
   if(!currentUser) return;
+  // Throttle : au plus une réinitialisation par seconde (mousemove tire en continu)
+  const now = Date.now();
+  if(now - _lastReset < 1000) return;
+  _lastReset = now;
+
+  // Annuler TOUS les minuteurs précédents (c'était le bug : ils s'empilaient)
   clearTimeout(sessionTimer);
-  warningShown = false;
+  clearTimeout(warnTimer);
+  clearInterval(countdownInterval);
   const warn = document.getElementById("session-warning");
   if(warn) warn.style.display = "none";
 
-  // Warning at 13 min
-  setTimeout(()=>{
+  // Avertissement à 13 min
+  warnTimer = setTimeout(()=>{
     if(!currentUser) return;
-    warningShown = true;
     const w = document.getElementById("session-warning");
     if(w){ w.style.display = "flex"; startWarningCountdown(120); }
   }, 13 * 60 * 1000);
 
-  // Logout at 15 min
+  // Déconnexion à 15 min
   sessionTimer = setTimeout(()=>{
     if(!currentUser) return;
     doLogout();
@@ -6294,22 +6370,30 @@ function resetSessionTimer(){
 }
 
 function startWarningCountdown(seconds){
+  clearInterval(countdownInterval);
   const el = document.getElementById("session-countdown");
   if(!el) return;
-  el.textContent = seconds;
-  if(seconds > 0){
-    setTimeout(()=>startWarningCountdown(seconds-1), 1000);
-  }
+  let s = seconds;
+  el.textContent = s;
+  countdownInterval = setInterval(()=>{
+    s--;
+    if(s <= 0){ clearInterval(countdownInterval); return; }
+    el.textContent = s;
+  }, 1000);
 }
 
 function extendSession(){
+  clearInterval(countdownInterval);
   const w = document.getElementById("session-warning");
   if(w) w.style.display = "none";
+  _lastReset = 0; // forcer le reset même si throttlé
   resetSessionTimer();
 }
 
 function doLogout(){
   clearTimeout(sessionTimer);
+  clearTimeout(warnTimer);
+  clearInterval(countdownInterval);
   currentUser = null;
   SESSION_TOKEN = null;
   localStorage.removeItem("mr_token");

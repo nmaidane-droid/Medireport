@@ -4,16 +4,19 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="theme-color" content="#1A6EFF"/>
+<meta name="theme-color" content="#0F766E"/>
 <title>MediReport Mobile</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='white' stroke='%231a1a2e' stroke-width='6'/><polyline points='2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50' fill='none' stroke='%23E8001C' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F1F5F9;color:#0F172A;font-size:15px;line-height:1.5;min-height:100vh}
-:root{--blue:#1A6EFF;--blue-l:#EAF1FF;--blue-d:#0D4DB3;--green:#16A34A;--green-l:#F0FDF4;--red:#E53935;--red-l:#FDECEA;--amber:#F59E0B;--amber-l:#FEF3C7;--g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g400:#94A3B8;--g500:#64748B;--g700:#334155;--g900:#0F172A}
+body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased;background:#F1F5F9;color:#0F172A;font-size:15px;line-height:1.5;min-height:100vh}
+:root{--blue:#0F766E;--blue-l:#F0FDFA;--blue-d:#115E59;--green:#16A34A;--green-l:#F0FDF4;--red:#E53935;--red-l:#FDECEA;--amber:#D97706;--amber-l:#FEF3C7;--g50:#FAFAF9;--g100:#F5F5F4;--g200:#E7E5E4;--g400:#A8A29E;--g500:#78716C;--g700:#44403C;--g900:#1C1917;--shadow-sm:0 1px 2px rgba(28,25,23,.04),0 2px 8px rgba(28,25,23,.04);--shadow-md:0 2px 4px rgba(28,25,23,.04),0 8px 24px rgba(28,25,23,.07)}
 
 /* LOGIN */
-#ls{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 16px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);overflow-y:auto}
+#ls{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 16px;background:linear-gradient(160deg,#F7F6F3 0%,#EDF7F5 55%,#E4F3F0 100%);overflow-y:auto}
 .l-ico{width:64px;height:64px;border-radius:18px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;margin:20px auto 10px;box-shadow:none}
 .l-tit{font-size:22px;font-weight:900;color:#0F172A;text-align:center;letter-spacing:-1px;margin-bottom:4px}
 .l-sub{font-size:13px;color:#64748B;text-align:center;margin-bottom:20px}
@@ -67,7 +70,7 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 .bgn{background:#F0FDF4;color:#16A34A}
 .ba{background:#FEF3C7;color:#92400E}
 .br{background:#FDECEA;color:#E53935}
-.bb{background:#EAF1FF;color:#1A6EFF}
+.bb{background:#EAF1FF;color:var(--blue)}
 .bgr{background:#F1F5F9;color:#64748B}
 
 /* ALERTS */
@@ -94,6 +97,20 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 /* EMPTY */
 .empty{text-align:center;padding:40px 20px;color:#94A3B8}
 .empty-i{font-size:48px;display:block;margin-bottom:12px}
+
+/* ═══ THÈME PREMIUM MÉDICAL (aligné index_v2) ═══ */
+.l-card{border-radius:20px;box-shadow:var(--shadow-md);border:1px solid var(--g100)}
+.l-inp{border-radius:12px;border-color:var(--g200)}
+.l-inp:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(15,118,110,.10)}
+.pkey{border-radius:12px !important;transition:all .18s cubic-bezier(.4,0,.2,1)}
+.pkey:active{transform:scale(.94);background:var(--blue-l) !important}
+button{font-family:inherit}
+.tab{border-radius:12px;font-weight:700;transition:all .18s cubic-bezier(.4,0,.2,1)}
+.tab.on{background:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.30)}
+.card,.c{border-radius:16px;box-shadow:var(--shadow-sm);border-color:var(--g100)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--g200);border-radius:99px}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 </style>
 </head>
 <body>
@@ -206,7 +223,7 @@ function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  err.style.color = "#1A6EFF";
+  err.style.color = "#0F766E";
   err.textContent = "Vérification…";
 
   // ── Authentification côté serveur ──
@@ -242,7 +259,7 @@ function login() {
     loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="white" stroke="#1a1a2e" stroke-width="4"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
       + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
       + '<div style="font-size:14px;color:#64748B">Chargement de votre dossier...</div>'
-      + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#1A6EFF;border-radius:99px;transition:width .3s"></div></div>';
+      + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#0F766E;border-radius:99px;transition:width .3s"></div></div>';
     document.body.appendChild(loadingDiv);
 
     // ── Charger UNIQUEMENT son dossier (le serveur force le filtre de toute façon) ──
@@ -337,6 +354,8 @@ function flash() {
 
 function logout() {
   clearTimeout(sessionTimer);
+  clearTimeout(warnTimer);
+  clearInterval(countdownInterval);
   USR=null; PAT=null; pin=""; DB=null; TOKEN=null;
   try { localStorage.removeItem("medirecord_db"); } catch(e) {}
   document.getElementById("uid").value="";
@@ -349,13 +368,20 @@ function logout() {
 // ── SESSION TIMEOUT 10 min ────────────────────────────────────────
 var sessionTimer = null;
 var warnTimer = null;
+var countdownInterval = null;
+var _lastReset = 0;
 var TIMEOUT = 15 * 60 * 1000;
 var WARN_AT = 13 * 60 * 1000;
 
 function resetTimer() {
   if (!USR) return;
+  var now = Date.now();
+  if (now - _lastReset < 1000) return; // throttle 1s
+  _lastReset = now;
+
   clearTimeout(sessionTimer);
   clearTimeout(warnTimer);
+  clearInterval(countdownInterval);
   var banner = document.getElementById("timeout-banner");
   if (banner) banner.style.display = "none";
 
@@ -372,14 +398,23 @@ function resetTimer() {
 }
 
 function startCountdown(s) {
+  clearInterval(countdownInterval);
   var el = document.getElementById("timeout-count");
-  if (el) el.textContent = s;
-  if (s > 0) setTimeout(function(){ startCountdown(s-1); }, 1000);
+  if (!el) return;
+  var v = s;
+  el.textContent = v;
+  countdownInterval = setInterval(function(){
+    v--;
+    if (v <= 0) { clearInterval(countdownInterval); return; }
+    el.textContent = v;
+  }, 1000);
 }
 
 function extendSession() {
+  clearInterval(countdownInterval);
   var b = document.getElementById("timeout-banner");
   if (b) b.style.display = "none";
+  _lastReset = 0;
   resetTimer();
 }
 
@@ -499,7 +534,7 @@ function tabSyn() {
   }
   h+='<div style="text-align:center;font-size:11px;color:#94A3B8;padding:10px 0">🔒 Dossier confidentiel — CNDP Maroc</div>';
   // Bouton bilan complet
-  h += '<div style="padding:16px 0 8px"><button onclick="printBilanMobile()" style="background:#1A6EFF;color:#fff;border:none;border-radius:12px;padding:13px 0;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;width:100%">🖨️ Imprimer mon bilan complet</button></div>';
+  h += '<div style="padding:16px 0 8px"><button onclick="printBilanMobile()" style="background:#0F766E;color:#fff;border:none;border-radius:12px;padding:13px 0;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;width:100%">🖨️ Imprimer mon bilan complet</button></div>';
   return h;
 }
 
@@ -542,7 +577,7 @@ function tabCon() {
         h+='</div>';
         // OD à droite
         h+='<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px">';
-        h+='<div style="font-size:11px;font-weight:800;color:#1A6EFF;margin-bottom:6px;text-align:center">👁 OD</div>';
+        h+='<div style="font-size:11px;font-weight:800;color:#0F766E;margin-bottom:6px;text-align:center">👁 OD</div>';
         var odFields=[["Sphère","Sphère OD"],["Cylindre","Cylindre OD"],["Axe","Axe OD"],["AV sc","AV sc OD"],["AV cc","AV cc OD"],["Tension","TO OD"]];
         odFields.forEach(function(f){
           if(ct[f[1]]) h+='<div style="font-size:11px;margin-bottom:3px"><span style="color:#94A3B8">'+f[0]+'</span> <strong>'+ct[f[1]]+'</strong></div>';
@@ -796,7 +831,7 @@ function showServiceUnavailable() {
     err.innerHTML = '<div style="font-size:48px">⚠️</div>'
       + '<div style="font-size:20px;font-weight:800;color:#0F172A">Service temporairement indisponible</div>'
       + '<div style="font-size:14px;color:#64748B;max-width:320px;line-height:1.6">Vos données ne sont pas accessibles pour le moment. Veuillez réessayer plus tard.<br/><br/>Si le problème persiste, contactez votre administrateur.</div>'
-      + '<button onclick="location.reload()" style="background:#1A6EFF;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">🔄 Réessayer</button>';
+      + '<button onclick="location.reload()" style="background:#0F766E;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">🔄 Réessayer</button>';
     document.body.appendChild(err);
   }
 }
@@ -866,27 +901,27 @@ function printBilanMobile() {
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=5.0">'
     +'<title>Mon bilan complet</title>'
     +'<style>*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}body{padding:16px;color:#0F172A;font-size:12px}'
-    +'.header{border-bottom:2px solid #1A6EFF;padding-bottom:10px;margin-bottom:14px}'
-    +'.logo{font-size:18px;font-weight:900;color:#0F172A}.logo span{color:#1A6EFF}'
-    +'.doc-title{font-size:12px;font-weight:800;color:#1A6EFF;margin-top:2px}'
+    +'.header{border-bottom:2px solid #0F766E;padding-bottom:10px;margin-bottom:14px}'
+    +'.logo{font-size:18px;font-weight:900;color:#0F172A}.logo span{color:#0F766E}'
+    +'.doc-title{font-size:12px;font-weight:800;color:#0F766E;margin-top:2px}'
     +'.pat-box{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;margin-bottom:12px}'
     +'.pat-name{font-size:15px;font-weight:900;margin-bottom:6px}'
     +'.pat-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}'
     +'.pat-lbl{font-size:8px;color:#94A3B8;text-transform:uppercase}'
     +'.pat-val{font-size:11px;font-weight:700}'
-    +'.sec-title{font-size:9px;font-weight:700;color:#1A6EFF;text-transform:uppercase;border-bottom:1px solid #E2E8F0;padding-bottom:3px;margin:12px 0 6px}'
+    +'.sec-title{font-size:9px;font-weight:700;color:#0F766E;text-transform:uppercase;border-bottom:1px solid #E2E8F0;padding-bottom:3px;margin:12px 0 6px}'
     +'.tag{display:inline-block;background:#EFF6FF;color:#1D4ED8;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:600;margin:2px}'
     +'.tag-red{background:#FEE2E2;color:#DC2626}'
     +'.tag-or{background:#FEF3C7;color:#D97706}'
     +'.rx-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:11px}'
     +'.card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:8px;margin-bottom:6px}'
-    +'.card-date{font-size:9px;font-weight:700;color:#1A6EFF}'
+    +'.card-date{font-size:9px;font-weight:700;color:#0F766E}'
     +'.card-title{font-size:11px;font-weight:700;margin:2px 0}'
     +'.card-body{font-size:10px;color:#475569}'
     +'.res-bad{color:#DC2626;font-weight:700}.res-warn{color:#D97706;font-weight:700}.res-ok{color:#16A34A}'
     +'.rdv-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:8px}'
     +'.footer{margin-top:16px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:8px;color:#94A3B8;font-style:italic}'
-    +'button.print-btn{background:#1A6EFF;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-bottom:14px}'
+    +'button.print-btn{background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-bottom:14px}'
     +'@media print{button{display:none}@page{margin:10mm;size:A4}}</style></head><body>'
     +'<button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>'
     +'<div class="header"><div class="logo">Medi<span>Report</span></div><div class="doc-title">BILAN COMPLET PATIENT · '+todayStr+'</div></div>'
