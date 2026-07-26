@@ -625,7 +625,9 @@ function tabSyn() {
   if(cons.length){
     var c=cons[0];
     h+='<div class="card"><div class="ctit">🩺 Dernière consultation</div>';
-    h+='<div style="font-size:11px;color:#94A3B8;margin-bottom:5px">'+c.date+' · '+c.spec+'</div>';
+    var drC=DB.users.find(function(u){return u.id===c.dr;});
+    var drCN=drC?((drC.titre?drC.titre+" ":"")+drC.prenom+" "+drC.nom):"";
+    h+='<div style="font-size:11px;color:#94A3B8;margin-bottom:5px">'+c.date+' · '+c.spec+(drCN?' · '+drCN:'')+'</div>';
     h+='<div style="font-size:14px;font-weight:700;margin-bottom:5px">'+c.motif+'</div>';
     h+='<div style="font-size:13px;color:#334155;line-height:1.6">'+(c.cr||"").slice(0,200)+'</div></div>';
   }
