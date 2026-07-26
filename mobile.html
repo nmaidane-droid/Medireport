@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#0F766E"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icon-192.png"/>
 <title>MediReport Mobile</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='white' stroke='%231a1a2e' stroke-width='6'/><polyline points='2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50' fill='none' stroke='%23E8001C' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/></svg>"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,12 +49,16 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 .p-consent{font-size:11px;font-weight:700;margin-top:5px;background:rgba(255,255,255,.2);display:inline-block;padding:2px 10px;border-radius:99px;color:#fff}
 
 /* TABS */
-.tabs{display:flex;flex-wrap:wrap;gap:8px;background:transparent;padding:10px 14px;flex-shrink:0}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--g200);padding:4px 4px 6px;flex-shrink:0;position:sticky;top:0;z-index:50;box-shadow:0 4px 16px rgba(28,25,23,.05)}
 .tabs::-webkit-scrollbar{display:none}
-.tab{display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:6px;padding:11px 6px;font-size:12.5px;font-weight:700;color:var(--g700);cursor:pointer;background:#fff;border:1.5px solid var(--g200);border-radius:99px;white-space:nowrap;flex:1 1 calc(33.333% - 6px);min-width:0;transition:all .18s cubic-bezier(.4,0,.2,1);user-select:none;box-shadow:var(--shadow-sm);line-height:1}
-.tab.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 4px 12px rgba(15,118,110,.35)}
-.tab:active{transform:scale(.95)}
-.tab-i{font-size:17px;line-height:1;display:inline-block}
+.tab{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px 6px;border-radius:12px;cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1);user-select:none;min-width:0}
+.tab-i{font-size:20px;line-height:1;transition:transform .18s}
+.tab-l{font-size:10px;font-weight:700;color:var(--g500);letter-spacing:.1px;white-space:nowrap}
+.tab.on{background:var(--blue-l)}
+.tab.on .tab-l{color:var(--blue)}
+.tab.on .tab-i{transform:scale(1.12)}
+.tab.on::before{content:"";position:absolute;top:-1px;width:18px;height:3px;background:var(--blue);border-radius:0 0 99px 99px}
+.tab:active{transform:scale(.94)}
 
 /* CONTENT */
 .ct{flex:1;padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -162,12 +168,12 @@ button{font-family:inherit}
     </div>
   </div>
   <div class="tabs" id="tabs">
-    <div class="tab on" onclick="switchTab('syn',this)"><span class="tab-i">📋</span>Résumé</div>
-    <div class="tab" onclick="switchTab('con',this)"><span class="tab-i">🩺</span>Consultations</div>
-    <div class="tab" onclick="switchTab('lab',this)"><span class="tab-i">🧪</span>Labo</div>
-    <div class="tab" onclick="switchTab('med',this)"><span class="tab-i">💊</span>Médicaments</div>
-    <div class="tab" onclick="switchTab('rdv',this)"><span class="tab-i">📅</span>RDV</div>
-    <div class="tab" onclick="switchTab('img',this)"><span class="tab-i">🔬</span>Imagerie</div>
+    <div class="tab on" onclick="switchTab('syn',this)"><span class="tab-i">📋</span><span class="tab-l">Résumé</span></div>
+    <div class="tab" onclick="switchTab('con',this)"><span class="tab-i">🩺</span><span class="tab-l">Consult.</span></div>
+    <div class="tab" onclick="switchTab('lab',this)"><span class="tab-i">🧪</span><span class="tab-l">Labo</span></div>
+    <div class="tab" onclick="switchTab('med',this)"><span class="tab-i">💊</span><span class="tab-l">Médic.</span></div>
+    <div class="tab" onclick="switchTab('rdv',this)"><span class="tab-i">📅</span><span class="tab-l">RDV</span></div>
+    <div class="tab" onclick="switchTab('img',this)"><span class="tab-i">🔬</span><span class="tab-l">Imagerie</span></div>
   </div>
   <div class="ct" id="ct"></div>
 </div>
@@ -980,5 +986,12 @@ function printBilanMobile() {
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
   var w = window.open("", "_blank");
   if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ── PWA : enregistrement du service worker ──
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("/sw.js").catch(function(){});
+  });
 }
 </script>

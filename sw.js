@@ -1,121 +1,38 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MediReport Mobile — Service Worker
-// Stratégie : Cache-First pour les assets statiques, Network-First pour le HTML
-// ─────────────────────────────────────────────────────────────────────────────
+// MediReport — Service Worker v2 (stratégie RÉSEAU D'ABORD)
+// Le cache n'est utilisé QUE si le réseau est indisponible.
+// Garantit que chaque déploiement est visible immédiatement.
 
-const CACHE_NAME = "medireport-v1";
-const OFFLINE_URL = "./mobile.html";
+const CACHE = "medireport-v2";
+const OFFLINE_URLS = ["/mobile.html", "/index.html", "/icon-192.png", "/icon-512.png"];
 
-// Fichiers à mettre en cache immédiatement à l'installation
-const PRECACHE_ASSETS = [
-  "./mobile.html",
-  "./manifest.json"
-];
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(OFFLINE_URLS)));
+  self.skipWaiting();
+});
 
-// ── INSTALL ──────────────────────────────────────────────────────────────────
-self.addEventListener("install", (event) => {
-  console.log("[SW] Installation...");
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("[SW] Mise en cache des assets statiques");
-      return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => {
-      // Prendre le contrôle immédiatement sans attendre le rechargement
-      return self.skipWaiting();
-    })
+self.addEventListener("activate", (e) => {
+  // Purger les anciens caches (dont l'éventuel sw v1)
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
 });
 
-// ── ACTIVATE ─────────────────────────────────────────────────────────────────
-self.addEventListener("activate", (event) => {
-  console.log("[SW] Activation...");
-  event.waitUntil(
-    Promise.all([
-      // Supprimer les anciens caches
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter((name) => name !== CACHE_NAME)
-            .map((name) => {
-              console.log("[SW] Suppression ancien cache:", name);
-              return caches.delete(name);
-            })
-        );
-      }),
-      // Prendre le contrôle de tous les clients ouverts
-      self.clients.claim()
-    ])
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  // Jamais de cache pour les API (données médicales toujours fraîches, jamais stockées)
+  if (req.url.includes("/api/")) return;
+  if (req.method !== "GET") return;
+
+  e.respondWith(
+    fetch(req)
+      .then((res) => {
+        // Réseau OK → mettre à jour le cache en arrière-plan pour le mode hors-ligne
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(req)) // Hors-ligne uniquement → cache
   );
-});
-
-// ── FETCH ─────────────────────────────────────────────────────────────────────
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Ignorer les requêtes non-GET et les requêtes cross-origin
-  if (request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;
-
-  // Stratégie Network-First pour le HTML principal
-  if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
-    event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          // Mettre à jour le cache avec la réponse réseau fraîche
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          });
-          return networkResponse;
-        })
-        .catch(() => {
-          // Réseau indisponible → servir depuis le cache
-          return caches.match(OFFLINE_URL).then((cachedResponse) => {
-            return cachedResponse || new Response(
-              "<h1>Hors ligne</h1><p>Veuillez vérifier votre connexion.</p>",
-              { headers: { "Content-Type": "text/html; charset=utf-8" } }
-            );
-          });
-        })
-    );
-    return;
-  }
-
-  // Stratégie Cache-First pour les autres assets (JSON, images, etc.)
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Revalidation en arrière-plan (stale-while-revalidate)
-        fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, networkResponse);
-            });
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-
-      // Pas en cache → réseau
-      return fetch(request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200) {
-          return networkResponse;
-        }
-        const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseClone);
-        });
-        return networkResponse;
-      });
-    })
-  );
-});
-
-// ── MESSAGE ───────────────────────────────────────────────────────────────────
-// Permettre au client de demander une mise à jour du SW
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
 });
