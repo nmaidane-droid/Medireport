@@ -168,7 +168,7 @@ button{font-family:inherit}
     </div>
   </div>
   <div class="tabs" id="tabs">
-    <div class="tab on" onclick="switchTab('syn',this)"><span class="tab-i">📋</span><span class="tab-l">Résumé</span></div>
+    <div class="tab on" onclick="switchTab('syn',this)"><span class="tab-i">📋</span><span class="tab-l">Synthèse</span></div>
     <div class="tab" onclick="switchTab('con',this)"><span class="tab-i">🩺</span><span class="tab-l">Consult.</span></div>
     <div class="tab" onclick="switchTab('lab',this)"><span class="tab-i">🧪</span><span class="tab-l">Labo</span></div>
     <div class="tab" onclick="switchTab('med',this)"><span class="tab-i">💊</span><span class="tab-l">Médic.</span></div>
@@ -269,7 +269,7 @@ function login() {
 
     // ── Charger UNIQUEMENT son dossier (le serveur force le filtre de toute façon) ──
     DB = {users:[user], patients:[], consultations:{}, labos:{}, rx:{}, rdv:[], imagerie:{}, access:[]};
-    var loaded = 0, total = 6;
+    var loaded = 0, total = 7;
 
     function updateBar(){ loaded++; var pct=(loaded/total*100); var lb=document.getElementById("load-bar"); if(lb) lb.style.width=pct+"%"; if(loaded>=total) launchApp(); }
 
@@ -313,6 +313,13 @@ function login() {
     });
     supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
       if(rows){ DB.consultations[pid]=rows; }
+      updateBar();
+    });
+    supaGet("users?select=*", function(rows){
+      if(rows && rows.length){
+        var me = DB.users[0];
+        DB.users = [me].concat(rows.filter(function(u){ return u.id !== me.id; }));
+      }
       updateBar();
     });
   }).catch(function(){

@@ -2225,7 +2225,7 @@ function rPatients(){
         <div>👤 ${ref?(ref.titre||"Dr.")+" "+ref.nom:"—"}</div>
         <div style="margin-top:4px">📅 ${rdvCount} RDV</div>
         ${canEdit?`<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
-          <button class="btn bp bsm" onclick="event.stopPropagation();printFicheAcces('${DB.users.find(x=>x.patientId===p.id)?.id||p.userId}')" title="Fiche accès">🖨️</button>
+          
           <button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button>
           <button class="btn bd bsm" onclick="event.stopPropagation();delPatient('${p.id}')">🗑</button>
         </div>`:""}
@@ -2277,7 +2277,7 @@ function filterPatients(q){
         <div>👤 ${ref?(ref.titre||"Dr.")+" "+ref.nom:"—"}</div>
         <div style="margin-top:4px">📅 ${rdvCount} RDV</div>
         ${canEdit2?`<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
-          <button class="btn bp bsm" onclick="event.stopPropagation();printFicheAcces('${DB.users.find(x=>x.patientId===p.id)?.id||p.userId}')" title="Fiche accès">🖨️</button>
+          
           <button class="btn bs bsm" onclick="event.stopPropagation();showEditPatient('${p.id}')">✏️</button>
           <button class="btn bd bsm" onclick="event.stopPropagation();delPatient('${p.id}')">🗑</button>
         </div>`:""}
@@ -2322,7 +2322,7 @@ function rDossier(){
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0;flex-wrap:wrap">
       ${(canConsult&&["medecin","specialiste"].includes(u.role))?`<button class="btn bs bsm" onclick="showDemandeAvisModal('${p.id}', d=>{DB.demandes_avis.push(d);saveDB(DB,{table:'demandes_avis',rows:[Object.assign({},d,{patient_id:d.patientId})]});})" title="Demande d'avis spécialisé">❤️ Avis spécialisé</button>`:""}
       ${(["medecin","specialiste","admin"].includes(u.role)&&!p.userId)?`<button class="btn bp bsm" onclick="activerAccesMobile('${p.id}')">📱 Activer accès mobile</button>`:""}
-      ${(["medecin","specialiste","admin"].includes(u.role)&&p.userId)?`<button class="btn bs bsm" onclick="printFicheAcces('${p.userId}')">🖨️ Fiche accès</button>`:""}
+      
       ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="showEditPatient('${p.id}')">✏️ Modifier</button>`:""}
       ${(["medecin","specialiste","admin"].includes(u.role))?`<button class="btn bs bsm" onclick="printBilanComplet('${p.id}')">🖨️ Bilan complet</button>`:""}
     </div>
