@@ -206,206 +206,120 @@ function login() {
   if (!id) { err.textContent = "Saisissez votre identifiant"; return; }
   if (pin.length < 6) { err.textContent = "Saisissez votre code PIN"; return; }
 
-  // Vérifier cache localStorage (fallback si Supabase indisponible)
-  try {
-    var raw = localStorage.getItem("medirecord_db");
-    if (raw) DB = JSON.parse(raw);
-  } catch(e) { DB = null; }
+  err.style.color = "#1A6EFF";
+  err.textContent = "Vérification…";
 
-  // Si cache vide ou version obsolète, charger TOUTES les données depuis Supabase
-  if (!DB || !DB.users || !DB.users.length) {
-    err.textContent = "⏳ Connexion en cours...";
-    var loaded = 0; var total = 4;
-    var freshDB = {users:[],patients:[],consultations:{},labos:{},rx:{},rdv:[],imagerie:{},access:[],demandes_labo:[],demandes_avis:[],logs:[]};
-
-    function checkDone() {
-      loaded++;
-      if (loaded < total) return;
-      if (!freshDB.users.length) {
-        err.textContent = "Service indisponible. Réessayez plus tard.";
-        pin = ""; document.querySelectorAll(".dot").forEach(function(d){d.classList.remove("on");});
-        return;
-      }
-      DB = freshDB;
-      try { localStorage.setItem("medirecord_db", JSON.stringify(DB)); } catch(e) {}
-      err.textContent = "";
-      login();
+  // ── Authentification côté serveur ──
+  fetch("/api/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ login: id, pin: pin })
+  }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+  .then(function(res){
+    if (!res.ok) {
+      err.style.color = "#DC2626";
+      err.textContent = res.data.error || "Échec de connexion";
+      pin = ""; upd(); flash();
+      return;
+    }
+    var user = res.data.user;
+    if (user.role !== "patient" || !user.patientId) {
+      err.style.color = "#DC2626";
+      err.textContent = "Ce compte n'est pas un accès patient";
+      pin = ""; upd();
+      return;
     }
 
-    supaGet("users?select=*", function(rows) {
-      if (rows) freshDB.users = rows.map(function(u){ return Object.assign({},u,{patientId:u.patient_id}); });
-      checkDone();
+    TOKEN = res.data.token;
+    USR = user; pin = "";
+    var pid = user.patientId;
+
+    // ── Écran de chargement ──
+    document.getElementById("ls").style.display = "none";
+    var loadingDiv = document.createElement("div");
+    loadingDiv.id = "loading-screen";
+    loadingDiv.style.cssText = "position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px";
+    loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="white" stroke="#1a1a2e" stroke-width="4"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
+      + '<div style="font-size:14px;color:#64748B">Chargement de votre dossier...</div>'
+      + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#1A6EFF;border-radius:99px;transition:width .3s"></div></div>';
+    document.body.appendChild(loadingDiv);
+
+    // ── Charger UNIQUEMENT son dossier (le serveur force le filtre de toute façon) ──
+    DB = {users:[user], patients:[], consultations:{}, labos:{}, rx:{}, rdv:[], imagerie:{}, access:[]};
+    var loaded = 0, total = 6;
+
+    function updateBar(){ loaded++; var pct=(loaded/total*100); var lb=document.getElementById("load-bar"); if(lb) lb.style.width=pct+"%"; if(loaded>=total) launchApp(); }
+
+    function launchApp(){
+      if (!PAT) {
+        var ls0 = document.getElementById("loading-screen");
+        if(ls0) ls0.remove();
+        document.getElementById("ls").style.display = "flex";
+        err.style.color = "#DC2626";
+        err.textContent = "Dossier introuvable — contactez votre médecin";
+        return;
+      }
+      var ls1 = document.getElementById("loading-screen");
+      if(ls1) ls1.remove();
+      document.getElementById("app").style.display = "flex";
+      document.getElementById("app").style.flexDirection = "column";
+      buildHeader();
+      showTab("syn");
+      resetTimer();
+    }
+
+    supaGet("patients?id=eq."+pid+"&select=*", function(rows){
+      if(rows&&rows[0]){ PAT=Object.assign({},rows[0],{userId:rows[0].user_id}); DB.patients=[PAT]; }
+      updateBar();
     });
-    supaGet("patients?select=*", function(rows) {
-      if (rows) freshDB.patients = rows.map(function(p){ return Object.assign({},p,{userId:p.user_id}); });
-      checkDone();
+    supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.rx[pid]=rows.map(function(rx){ return Object.assign({},rx,{patientId:rx.patient_id,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance,a_vie:rx.a_vie||false,date_fin:rx.date_fin||null}); }); }
+      updateBar();
     });
-    supaGet("rdv?select=*", function(rows) {
-      if (rows) freshDB.rdv = rows.map(function(r){ return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color}); });
-      checkDone();
+    supaGet("labos?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.labos[pid]=rows.map(function(l){ return Object.assign({},l,{patientId:l.patient_id,res:l.resultats||[]}); }); }
+      updateBar();
     });
-    supaGet("patient_access?select=*", function(rows) {
-      if (rows) freshDB.access = rows.map(function(a){ return Object.assign({},a,{patientId:a.patient_id,userId:a.user_id}); });
-      checkDone();
+    supaGet("rdv?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.rdv=rows.map(function(r){return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color});}); }
+      updateBar();
     });
-    return;
-  }
-
-  var user = null;
-  for (var i=0; i<DB.users.length; i++) {
-    if (DB.users[i].login === id && DB.users[i].role === "patient") { user = DB.users[i]; break; }
-  }
-  if (!user) { err.textContent = "Identifiant non reconnu"; flash(); return; }
-  if (pin !== (user.pin || "000000")) { err.textContent = "Code PIN incorrect"; flash(); return; }
-
-  var pat = null;
-  for (var j=0; j<DB.patients.length; j++) {
-    if (DB.patients[j].id === user.patientId) { pat = DB.patients[j]; break; }
-  }
-  if (!pat) { err.textContent = "Dossier introuvable"; return; }
-
-  USR = user; PAT = pat; pin = "";
-
-  // ── Afficher écran de chargement ──
-  document.getElementById("ls").style.display = "none";
-  var loadingDiv = document.createElement("div");
-  loadingDiv.id = "loading-screen";
-  loadingDiv.style.cssText = "position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px";
-  loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="white" stroke="#1a1a2e" stroke-width="4"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
-    + '<div style="font-size:14px;color:#64748B">Chargement de votre dossier...</div>'
-    + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#1A6EFF;border-radius:99px;transition:width .3s"></div></div>';
-  document.body.appendChild(loadingDiv);
-
-  // ── Charger toutes les données depuis Supabase en parallèle ──
-  var pid = pat.id;
-  var loaded = 0;
-  var total = 6;
-
-  function updateBar(){ loaded++; var pct=(loaded/total*100); document.getElementById("load-bar").style.width=pct+"%"; if(loaded>=total) launchApp(); }
-
-  function launchApp(){
-    // Sauvegarder le dossier complet dans le cache
-    try { localStorage.setItem("medirecord_db", JSON.stringify(DB)); } catch(e) {}
-    var ls = document.getElementById("loading-screen");
-    if(ls) ls.remove();
-    document.getElementById("app").style.display = "flex";
-    document.getElementById("app").style.flexDirection = "column";
-    buildHeader();
-    showTab("syn");
-    resetTimer();
-  }
-
-  // Prescriptions
-  supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-    if(rows){ DB.rx=DB.rx||{}; DB.rx[pid]=rows.map(function(rx){ return Object.assign({},rx,{patientId:rx.patient_id,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance,a_vie:rx.a_vie||false,date_fin:rx.date_fin||null}); }); }
-    updateBar();
+    supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{patientId:i.patient_id,cr:i.conclusion,res:i.resultat,rc:i.resultat==="Normal"?"g":"a"}); }); }
+      updateBar();
+    });
+    supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+      if(rows){ DB.consultations[pid]=rows; }
+      updateBar();
+    });
+  }).catch(function(){
+    err.style.color = "#DC2626";
+    err.textContent = "Service indisponible — vérifiez votre connexion";
   });
-
-  // Labos
-  supaGet("labos?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-    if(rows){ DB.labos=DB.labos||{}; DB.labos[pid]=rows.map(function(l){ return Object.assign({},l,{patientId:l.patient_id,res:l.resultats||[]}); }); }
-    updateBar();
-  });
-
-  // RDV
-  supaGet("rdv?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-    if(rows){ var others=(DB.rdv||[]).filter(function(r){return r.patientId!==pid;}); DB.rdv=others.concat(rows.map(function(r){return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color});})); }
-    updateBar();
-  });
-
-  // Consultations
-  supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-    if(rows){ DB.imagerie=DB.imagerie||{}; DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{patientId:i.patient_id,cr:i.conclusion,res:i.resultat,rc:i.resultat==="Normal"?"g":"a"}); }); }
-    updateBar();
-  });
-
-  supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-    if(rows){ DB.consultations=DB.consultations||{}; DB.consultations[pid]=rows; }
-    updateBar();
-  });
-
-  // Dossier patient
-  supaGet("patients?id=eq."+pid+"&select=*", function(rows){
-    if(rows&&rows[0]){ PAT=Object.assign({},rows[0],{userId:rows[0].user_id}); DB.patients=(DB.patients||[]).map(function(p){return p.id===pid?PAT:p;}); }
-    updateBar();
-  });
-
-  // Realtime désactivé sur mobile — refreshPatientData suffit
 }
 
 
-// ── SUPABASE CONFIG ──────────────────────────────────────────
-var SUPA_URL = "https://sfpjcqhaunkicllzvoba.supabase.co";
-var SUPA_KEY = "sb_publishable_KDVwa80iE7olqEnpregnaQ_hPUw7K_5";
+// ── ACCÈS SÉCURISÉ VIA PROXY /api/db ─────────────────────────
+var TOKEN = null;
 
 function supaGet(path, cb) {
-  fetch(SUPA_URL + "/rest/v1/" + path, {
-    headers: {"apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY}
-  }).then(function(r){ return r.json(); }).then(cb).catch(function(){ cb(null); });
+  fetch("/api/db", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", "x-session": TOKEN || ""},
+    body: JSON.stringify({ path: path, method: "GET" })
+  }).then(function(r){
+    if (r.status === 401) { logout(); return null; }
+    return r.json();
+  }).then(cb).catch(function(){ cb(null); });
 }
 
 function startRealtimeMobile() {
-  if (window._mobileWS) { try { window._mobileWS.close(); } catch(e){} }
-  var wsUrl = SUPA_URL.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
-  var ws = new WebSocket(wsUrl);
-  window._mobileWS = ws;
-
-  ws.onopen = function() {
-    var tables = ["prescriptions","rdv","labos","consultations"];
-    tables.forEach(function(table, i) {
-      setTimeout(function() {
-        ws.send(JSON.stringify({
-          topic: "realtime:public:" + table,
-          event: "phx_join",
-          payload: {config:{broadcast:{self:false},presence:{key:""},postgres_changes:[{event:"*",schema:"public",table:table,filter:"patient_id=eq."+PAT.id}]}},
-          ref: String(i+1)
-        }));
-      }, i * 200);
-    });
-    console.log("[Mobile Realtime] Connecte");
-  };
-
-  ws.onmessage = function(e) {
-    try {
-      var msg = JSON.parse(e.data);
-      if (msg.event !== "postgres_changes") return;
-      var data = msg.payload && msg.payload.data ? msg.payload.data : {};
-      var table = data.table, eventType = data.eventType, newRow = data.new;
-      if (!table || !newRow) return;
-      console.log("[Mobile Realtime]", eventType, table);
-
-      if (table === "prescriptions") {
-        if (!DB.rx[PAT.id]) DB.rx[PAT.id] = [];
-        var idx = DB.rx[PAT.id].findIndex(function(r){ return r.id === newRow.id; });
-        var mapped = Object.assign({},newRow,{patientId:newRow.patient_id,s:newRow.statut,ren:newRow.renouvellement,ord:newRow.ordonnance});
-        if (idx >= 0) DB.rx[PAT.id][idx] = mapped; else DB.rx[PAT.id].unshift(mapped);
-      } else if (table === "rdv") {
-        var ri = DB.rdv.findIndex(function(r){ return r.id === newRow.id; });
-        var rm = Object.assign({},newRow,{patientId:newRow.patient_id,s:newRow.statut,c:newRow.color});
-        if (ri >= 0) DB.rdv[ri] = rm; else DB.rdv.unshift(rm);
-      } else if (table === "labos") {
-        if (!DB.labos[PAT.id]) DB.labos[PAT.id] = [];
-        var li = DB.labos[PAT.id].findIndex(function(l){ return l.id === newRow.id; });
-        var lm = Object.assign({},newRow,{patientId:newRow.patient_id,res:newRow.resultats||[]});
-        if (li >= 0) DB.labos[PAT.id][li] = lm; else DB.labos[PAT.id].unshift(lm);
-      } else if (table === "consultations") {
-        if (!DB.consultations) DB.consultations = {};
-        if (!DB.consultations[PAT.id]) DB.consultations[PAT.id] = [];
-        var ci = DB.consultations[PAT.id].findIndex(function(c){ return c.id === newRow.id; });
-        if (ci >= 0) DB.consultations[PAT.id][ci] = newRow; else DB.consultations[PAT.id].unshift(newRow);
-      }
-      // Rafraichir l onglet en cours
-      var activeTab = document.querySelector(".tab.on");
-      if (activeTab) activeTab.click();
-    } catch(err) { console.warn("[Mobile Realtime] error:", err); }
-  };
-
-  ws.onerror = function() { console.warn("[Mobile Realtime] Erreur"); };
-  ws.onclose = function() {
-    console.warn("[Mobile Realtime] Deconnecte - reconnexion 30s");
-    if (USR) setTimeout(startRealtimeMobile, 30000);
-  };
+  // Realtime remplacé par un rafraîchissement périodique (RLS actif).
+  if (window._mobilePoll) clearInterval(window._mobilePoll);
+  window._mobilePoll = setInterval(function(){
+    if (USR && TOKEN && document.visibilityState === "visible") refreshPatientData();
+  }, 90000);
 }
 
 function flash() {
@@ -416,7 +330,8 @@ function flash() {
 
 function logout() {
   clearTimeout(sessionTimer);
-  USR=null; PAT=null; pin=""; DB=null;
+  USR=null; PAT=null; pin=""; DB=null; TOKEN=null;
+  try { localStorage.removeItem("medirecord_db"); } catch(e) {}
   document.getElementById("uid").value="";
   upd();
   document.getElementById("perr").textContent="";
@@ -858,12 +773,8 @@ function toggleImg(el){
 
 
 function buildDB() {
-  // Essayer le cache localStorage
-  var raw = localStorage.getItem("medirecord_db");
-  if (raw) {
-    try { return JSON.parse(raw); } catch(e) {}
-  }
-  // Aucun cache — retourner DB vide (login screen reste visible)
+  // Plus de cache local : les données médicales ne persistent pas sur l'appareil.
+  try { localStorage.removeItem("medirecord_db"); } catch(e) {}
   return {users:[],patients:[],consultations:{},labos:{},rx:{},rdv:[],imagerie:{},access:[],demandes_labo:[],demandes_avis:[],logs:[]};
 }
 
