@@ -61,7 +61,9 @@ export default async function handler(req) {
 
   const { pin: _omit, ...safeUser } = user;
   safeUser.patientId = user.patient_id || null;
-  const token = await signToken({ u: user.id, r: user.role, e: Date.now() + TOKEN_TTL_MS }, SRK);
+  const payload = { u: user.id, r: user.role, e: Date.now() + TOKEN_TTL_MS };
+  if (user.role === 'patient' && user.patient_id) payload.p = user.patient_id;
+  const token = await signToken(payload, SRK);
   return json({ token, user: safeUser });
 }
 

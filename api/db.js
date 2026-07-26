@@ -53,13 +53,33 @@ export default async function handler(req) {
   if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return json({ error: 'Méthode non autorisée' }, 403);
 
   const role = session.r;
+  let effectivePath = path;
 
   // ── Règles d'accès par rôle ──
-  // Patients (accès mobile) : lecture seule + marquage vu
+  // Patients (accès mobile) : lecture seule + marquage vu, STRICTEMENT limité à leur propre dossier
   if (role === 'patient') {
     const allowedWrite = (table === 'seen_items' || table === 'notifications_vues');
     if (method !== 'GET' && !allowedWrite) return json({ error: 'Accès refusé' }, 403);
     if (table === 'backups') return json({ error: 'Accès refusé' }, 403);
+
+    const myPatientId = session.p;
+    const myUserId = session.u;
+    const sep = effectivePath.includes('?') ? '&' : '?';
+    const PATIENT_SCOPED = ['consultations', 'labos', 'prescriptions', 'imagerie', 'rdv',
+                            'patient_access', 'demandes_labo', 'demandes_avis', 'demandes_acces'];
+    if (PATIENT_SCOPED.includes(table)) {
+      if (!myPatientId) return json({ error: 'Accès refusé' }, 403);
+      // Le serveur FORCE le filtre — impossible de lire un autre dossier
+      effectivePath = effectivePath + sep + 'patient_id=eq.' + encodeURIComponent(myPatientId);
+    } else if (table === 'patients') {
+      if (!myPatientId) return json({ error: 'Accès refusé' }, 403);
+      effectivePath = effectivePath + sep + 'id=eq.' + encodeURIComponent(myPatientId);
+    } else if (table === 'users') {
+      // Un patient ne peut lire que son propre compte
+      effectivePath = effectivePath + sep + 'id=eq.' + encodeURIComponent(myUserId);
+    } else if (table === 'seen_items' || table === 'notifications_vues') {
+      if (method === 'GET') effectivePath = effectivePath + sep + 'user_id=eq.' + encodeURIComponent(myUserId);
+    }
   }
   // Table backups : admin uniquement
   if (table === 'backups' && role !== 'admin') return json({ error: 'Accès refusé' }, 403);
@@ -80,7 +100,7 @@ export default async function handler(req) {
   if (body.prefer) headers.Prefer = body.prefer;
   else if (method !== 'GET') headers.Prefer = 'return=representation';
 
-  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+  const res = await fetch(SB_URL + '/rest/v1/' + effectivePath, {
     method,
     headers,
     body: method === 'GET' ? undefined : (body.body ?? undefined)
