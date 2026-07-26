@@ -157,7 +157,7 @@ button{font-family:inherit}
   </div>
   <div class="hdr">
     <div class="hdr-top">
-      <div class="hdr-logo" style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:white;padding:3px;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="22" fill="white"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>MediReport Mobile</div>
+      <div class="hdr-logo" style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:white;padding:3px;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="22" fill="white"/><polyline points="5,50 17,50 24,28 34,72 41,38 48,50 52,50 59,28 69,72 76,40 83,50 95,50" fill="none" stroke="#E8001C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>MediReport Mobile</div>
       <button class="h-out" onclick="logout()">Déconnexion</button>
     </div>
     <div class="p-card">
@@ -347,7 +347,7 @@ function login() {
     var loadingDiv = document.createElement("div");
     loadingDiv.id = "loading-screen";
     loadingDiv.style.cssText = "position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px";
-    loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="white" stroke="#1a1a2e" stroke-width="4"/><polyline points="2,50 16,50 23,22 33,78 40,35 47,50 53,50 60,22 70,78 77,36 84,50 98,50" fill="none" stroke="#E8001C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="98" height="98" rx="20" fill="white" stroke="#1a1a2e" stroke-width="1.5"/><polyline points="3,50 17,50 24,26 34,74 41,36 48,50 52,50 59,26 69,74 76,38 83,50 97,50" fill="none" stroke="#E8001C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
       + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
       + '<div style="font-size:14px;color:#64748B">Chargement de votre dossier...</div>'
       + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#0F766E;border-radius:99px;transition:width .3s"></div></div>';
