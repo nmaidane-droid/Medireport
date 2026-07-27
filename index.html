@@ -2446,6 +2446,22 @@ function _parseFRDate(s){
   return new Date(+m[3], +m[2]-1, +m[1]);
 }
 
+// Référentiel clinique : pathologie → paramètres à surveiller
+const PATHO_PARAMS = [
+  {match:/diab|dt2|dt1/i, params:[/hba1c|hémoglobine glyqu|hemoglobine glyqu/i, /glyc[ée]mie/i]},
+  {match:/irc|r[ée]nal|dialys|n[ée]phro/i, params:[/cr[ée]atinine/i, /dfg|egfr/i, /potassium|kali[ée]mie/i, /pth/i, /phosph/i, /calc[ée]?mie|calcium/i, /h[ée]moglobine(?! glyqu)/i]},
+  {match:/hta|hypertension/i, params:[/cr[ée]atinine/i, /potassium|kali[ée]mie/i, /sodium|natr[ée]mie/i]},
+  {match:/dyslipid|cholest/i, params:[/ldl/i, /hdl/i, /triglyc/i]},
+  {match:/an[ée]mie/i, params:[/h[ée]moglobine(?! glyqu)/i, /ferritine/i]},
+  {match:/thyro/i, params:[/tsh/i, /t4|thyroxine/i]},
+];
+function keyParamsForPatient(p){
+  const pathos = (p.pathologies||[]).concat(p.antecedents||[]).join(" ");
+  const out = [];
+  PATHO_PARAMS.forEach(pp => { if(pp.match.test(pathos)) pp.params.forEach(rx => out.push(rx)); });
+  return out;
+}
+
 function buildTrendsHtml(pid){
   const labos = (DB.labos[pid]||[]).map(l=>({d:_parseFRDate(l.date),res:l.res||[]})).filter(l=>l.d).sort((a,b)=>a.d-b.d);
   if(labos.length < 2) return "";
@@ -2456,11 +2472,17 @@ function buildTrendsHtml(pid){
     if(!series[r.p]) series[r.p] = {u:r.u||"", pts:[]};
     series[r.p].pts.push({v, s:r.s});
   }));
+  const p = DB.patients.find(x=>x.id===pid) || {};
+  const keyRx = keyParamsForPatient(p);
   const list = Object.entries(series).filter(([,s])=>s.pts.length>=2)
-    .map(([name,s])=>({name, u:s.u, pts:s.pts, last:s.pts[s.pts.length-1],
-      prio:{bad:2,warn:1}[s.pts[s.pts.length-1].s]||0}))
+    .map(([name,s])=>{
+      const isKey = keyRx.some(rx=>rx.test(name));
+      const last = s.pts[s.pts.length-1];
+      return {name, u:s.u, pts:s.pts, last, isKey,
+        prio: ({bad:4,warn:3}[last.s]||0) + (isKey?2:0)};
+    })
     .sort((a,b)=>b.prio-a.prio || b.pts.length-a.pts.length)
-    .slice(0,6);
+    .slice(0,8);
   if(!list.length) return "";
 
   const rows = list.map(t=>{
@@ -2471,7 +2493,7 @@ function buildTrendsHtml(pid){
     const bad = t.last.s==="bad";
     const color = bad?"var(--red)":t.last.s==="warn"?"var(--amber)":"var(--blue)";
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--g200)">
-      <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</span>
+      <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}${t.isKey?' <span title="Constante clé pour les pathologies du patient" style="font-size:8.5px;font-weight:800;background:var(--blue-l);color:var(--blue);padding:2px 6px;border-radius:99px;vertical-align:1px">SUIVI</span>':''}</span>
       <svg viewBox="0 0 ${sw} ${sh}" style="width:64px;height:20px;flex-shrink:0"><polyline points="${line}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span style="font-family:monospace;font-size:13px;font-weight:700;color:${bad?"var(--red)":"var(--g900)"};white-space:nowrap">${t.last.v} <span style="font-size:10px;color:var(--g400);font-weight:400">${t.u}</span></span>
     </div>`;
