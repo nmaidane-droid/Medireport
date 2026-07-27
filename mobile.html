@@ -145,7 +145,7 @@ button{font-family:inherit}
       <div class="k ok" onclick="login()">✓</div>
     </div>
     <div class="perr" id="perr"></div>
-    <div style="text-align:center;font-size:11px;color:#94A3B8;margin-top:8px">🔒 Accès sécurisé CNDP · 🇲🇦 Conçu au Maroc</div>
+    <div style="text-align:center;font-size:11px;color:#94A3B8;margin-top:8px">🔒 Accès sécurisé CNDP&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;🇲🇦 Conçu au Maroc</div>
   </div>
 </div>
 
@@ -568,68 +568,6 @@ function showTab(tab) {
 function emp(ico,txt){ return '<div class="empty"><span class="empty-i">'+ico+'</span>'+txt+'</div>'; }
 function bdg(t,c){ return '<span class="b '+c+'">'+t+'</span>'; }
 
-// ═══ v3 : ligne de vie + tendances (patient) ═══
-function _pFR(s){
-  if(!s) return null;
-  var m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
-}
-
-var PATHO_PARAMS = [
-  {match:/diab|dt2|dt1/i, params:[/hba1c|h[ée]moglobine glyqu/i, /glyc[ée]mie/i]},
-  {match:/irc|r[ée]nal|dialys|n[ée]phro/i, params:[/cr[ée]atinine/i, /dfg|egfr/i, /potassium|kali[ée]mie/i, /pth/i, /phosph/i, /calc[ée]?mie|calcium/i, /h[ée]moglobine(?! glyqu)/i]},
-  {match:/hta|hypertension/i, params:[/cr[ée]atinine/i, /potassium|kali[ée]mie/i, /sodium|natr[ée]mie/i]},
-  {match:/dyslipid|cholest/i, params:[/ldl/i, /hdl/i, /triglyc/i]},
-  {match:/an[ée]mie/i, params:[/h[ée]moglobine(?! glyqu)/i, /ferritine/i]},
-  {match:/thyro/i, params:[/tsh/i, /t4|thyroxine/i]}
-];
-function keyParamsM(p){
-  var s = (p.pathologies||[]).concat(p.antecedents||[]).join(" ");
-  var out = [];
-  PATHO_PARAMS.forEach(function(pp){ if(pp.match.test(s)) pp.params.forEach(function(rx){ out.push(rx); }); });
-  return out;
-}
-
-function trendsM(pid){
-  var labos = (DB.labos[pid]||[]).map(function(l){return {d:_pFR(l.date),res:l.res||[]};})
-    .filter(function(l){return l.d;}).sort(function(a,b){return a.d-b.d;});
-  if(labos.length < 2) return "";
-  var series = {};
-  labos.forEach(function(l){ l.res.forEach(function(r){
-    var v = parseFloat(String(r.v).replace(",",".").replace(/[^\d.\-]/g,""));
-    if(isNaN(v)) return;
-    if(!series[r.p]) series[r.p] = {u:r.u||"", pts:[]};
-    series[r.p].pts.push({v:v, s:r.s});
-  });});
-  var keyRx = keyParamsM(PAT||{});
-  var list = Object.keys(series).map(function(name){
-    var s = series[name];
-    var last = s.pts[s.pts.length-1];
-    var isKey = keyRx.some(function(rx){return rx.test(name);});
-    var prio = ((last.s==="bad")?4:(last.s==="warn")?3:0) + (isKey?2:0);
-    return {name:name, u:s.u, pts:s.pts, last:last, isKey:isKey, prio:prio};
-  }).filter(function(t){return t.pts.length>=2;})
-    .sort(function(a,b){return b.prio-a.prio || b.pts.length-a.pts.length;}).slice(0,7);
-  if(!list.length) return "";
-
-  var rows = list.map(function(t){
-    var vals = t.pts.map(function(pp){return pp.v;});
-    var min = Math.min.apply(null,vals), max = Math.max.apply(null,vals), rng = (max-min)||1;
-    var sw=60, sh=18;
-    var line = t.pts.map(function(pp,i){
-      return (i*sw/(t.pts.length-1)).toFixed(1)+","+((sh-2-(pp.v-min)/rng*(sh-4))).toFixed(1);
-    }).join(" ");
-    var bad = t.last.s==="bad";
-    var color = bad?"#E53935":(t.last.s==="warn"?"#D97706":"var(--blue)");
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px dashed #E7E5E4">'+
-      '<span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.name+(t.isKey?' <span style="font-size:8px;font-weight:800;background:var(--blue-l);color:var(--blue);padding:2px 5px;border-radius:99px;vertical-align:1px">SUIVI</span>':'')+'</span>'+
-      '<svg viewBox="0 0 '+sw+' '+sh+'" style="width:60px;height:18px;flex-shrink:0"><polyline points="'+line+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round"/></svg>'+
-      '<span style="font-family:monospace;font-size:13px;font-weight:700;color:'+(bad?"#E53935":"#1C1917")+';white-space:nowrap">'+t.last.v+' <span style="font-size:9.5px;color:#A8A29E;font-weight:400">'+t.u+'</span></span></div>';
-  }).join("");
-
-  return '<div class="card"><div class="ctit">📈 Mes constantes · '+labos.length+' bilans</div>'+rows+'</div>';
-}
-
 function tabSyn() {
   var p=PAT;
   var rx=sortByDate((DB.rx[p.id]||[]).filter(function(r){return r.s==="active";}), 'date', false);
@@ -655,7 +593,6 @@ function tabSyn() {
     h+='<div class="ale ale-r"><span>⚠️</span><div><strong>Allergie :</strong> '+a+'</div></div>';
   });
   if(p.dialyse) h+='<div class="ale ale-b"><span>💧</span><div><strong>Hémodialyse</strong> · '+p.seances_semaine+' séances/sem.</div></div>';
-  h+=trendsM(p.id);
   h+='<div class="card"><div class="ctit">👤 Mes informations</div><div class="igrid">';
   [["Naissance",p.dob],["Âge",(p.age||"?")+" ans"],["Groupe",p.groupe||"?"],["CIN",p.cin||"—"],["Téléphone",p.tel||"—"],["Ville",p.ville||"—"]].forEach(function(x){
     h+='<div class="ii"><div class="ilbl">'+x[0]+'</div><div class="ival">'+(x[1]||"—")+'</div></div>';

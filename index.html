@@ -423,7 +423,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 
       <button onclick="doLogin()" style="height:52px;border-radius:10px;background:var(--blue);color:#fff;font-size:14px;font-weight:800;border:none;cursor:pointer">OK ✓</button>
     </div>
     <div class="pin-error" id="ls-pin-err" style="text-align:center;min-height:18px;font-size:12px"></div>
-    <div style="text-align:center;font-size:11px;color:var(--g400);margin-top:6px">🔒 Accès sécurisé CNDP · 🇲🇦 Conçu au Maroc</div>
+    <div style="text-align:center;font-size:11px;color:var(--g400);margin-top:6px">🔒 Accès sécurisé CNDP&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;🇲🇦 Conçu au Maroc</div>
   </div>
 </div>
 
@@ -2438,73 +2438,6 @@ function rDossier(){
 function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===tab));renderDossierTab();}
 function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv}[dossierTab]||function(){})();}
 
-// ═══ v3 : Ligne de vie ECG + tendances graphiques ═══════════
-function _parseFRDate(s){
-  if(!s || typeof s !== "string") return null;
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(!m) return null;
-  return new Date(+m[3], +m[2]-1, +m[1]);
-}
-
-// Référentiel clinique : pathologie → paramètres à surveiller
-const PATHO_PARAMS = [
-  {match:/diab|dt2|dt1/i, params:[/hba1c|hémoglobine glyqu|hemoglobine glyqu/i, /glyc[ée]mie/i]},
-  {match:/irc|r[ée]nal|dialys|n[ée]phro/i, params:[/cr[ée]atinine/i, /dfg|egfr/i, /potassium|kali[ée]mie/i, /pth/i, /phosph/i, /calc[ée]?mie|calcium/i, /h[ée]moglobine(?! glyqu)/i]},
-  {match:/hta|hypertension/i, params:[/cr[ée]atinine/i, /potassium|kali[ée]mie/i, /sodium|natr[ée]mie/i]},
-  {match:/dyslipid|cholest/i, params:[/ldl/i, /hdl/i, /triglyc/i]},
-  {match:/an[ée]mie/i, params:[/h[ée]moglobine(?! glyqu)/i, /ferritine/i]},
-  {match:/thyro/i, params:[/tsh/i, /t4|thyroxine/i]},
-];
-function keyParamsForPatient(p){
-  const pathos = (p.pathologies||[]).concat(p.antecedents||[]).join(" ");
-  const out = [];
-  PATHO_PARAMS.forEach(pp => { if(pp.match.test(pathos)) pp.params.forEach(rx => out.push(rx)); });
-  return out;
-}
-
-function buildTrendsHtml(pid){
-  const labos = (DB.labos[pid]||[]).map(l=>({d:_parseFRDate(l.date),res:l.res||[]})).filter(l=>l.d).sort((a,b)=>a.d-b.d);
-  if(labos.length < 2) return "";
-  const series = {};
-  labos.forEach(l=>l.res.forEach(r=>{
-    const v = parseFloat(String(r.v).replace(",",".").replace(/[^\d.\-]/g,""));
-    if(isNaN(v)) return;
-    if(!series[r.p]) series[r.p] = {u:r.u||"", pts:[]};
-    series[r.p].pts.push({v, s:r.s});
-  }));
-  const p = DB.patients.find(x=>x.id===pid) || {};
-  const keyRx = keyParamsForPatient(p);
-  const list = Object.entries(series).filter(([,s])=>s.pts.length>=2)
-    .map(([name,s])=>{
-      const isKey = keyRx.some(rx=>rx.test(name));
-      const last = s.pts[s.pts.length-1];
-      return {name, u:s.u, pts:s.pts, last, isKey,
-        prio: ({bad:4,warn:3}[last.s]||0) + (isKey?2:0)};
-    })
-    .sort((a,b)=>b.prio-a.prio || b.pts.length-a.pts.length)
-    .slice(0,8);
-  if(!list.length) return "";
-
-  const rows = list.map(t=>{
-    const vals = t.pts.map(p=>p.v);
-    const min = Math.min(...vals), max = Math.max(...vals), rng = (max-min)||1;
-    const sw = 64, sh = 20;
-    const line = t.pts.map((p,i)=>`${(i*sw/(t.pts.length-1)).toFixed(1)},${(sh-2-(p.v-min)/rng*(sh-4)).toFixed(1)}`).join(" ");
-    const bad = t.last.s==="bad";
-    const color = bad?"var(--red)":t.last.s==="warn"?"var(--amber)":"var(--blue)";
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--g200)">
-      <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}${t.isKey?' <span title="Constante clé pour les pathologies du patient" style="font-size:8.5px;font-weight:800;background:var(--blue-l);color:var(--blue);padding:2px 6px;border-radius:99px;vertical-align:1px">SUIVI</span>':''}</span>
-      <svg viewBox="0 0 ${sw} ${sh}" style="width:64px;height:20px;flex-shrink:0"><polyline points="${line}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span style="font-family:monospace;font-size:13px;font-weight:700;color:${bad?"var(--red)":"var(--g900)"};white-space:nowrap">${t.last.v} <span style="font-size:10px;color:var(--g400);font-weight:400">${t.u}</span></span>
-    </div>`;
-  }).join("");
-
-  return `<div class="card" style="margin-bottom:14px">
-    <div class="ctit" style="margin-bottom:8px"><span class="ci">📈</span> Constantes suivies <span style="font-size:10.5px;color:var(--g400);font-weight:500;text-transform:none;letter-spacing:0">· évolution sur ${labos.length} bilans</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 28px">${rows}</div>
-  </div>`;
-}
-
 function dSynthese(){
   const p = DB.patients.find(x=>x.id===currentPatientId);
   const u = currentUser;
@@ -2615,11 +2548,9 @@ function dSynthese(){
     </div>`;
   }).join("");
 
-  const trendsHtml = buildTrendsHtml(p.id);
   G("dossier-content").innerHTML=`
     ${dialyseAlert||""}
     ${allergyAlerts}
-    ${trendsHtml}
 
     <!-- Identité patient -->
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
