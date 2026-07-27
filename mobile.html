@@ -1094,8 +1094,19 @@ function printBilanMobile() {
   html += '</body></html>';
 
   // Ouvrir dans la même fenêtre pour éviter le blocage mobile
-  var w = window.open("", "_blank");
-  if (w) { w.document.write(html); w.document.close(); }
+  // Affichage DANS l'app (pas de nouvel onglet — évite la croix Chrome qui fait sortir)
+  var ov = document.createElement("div");
+  ov.id = "bilan-overlay";
+  ov.style.cssText = "position:fixed;inset:0;z-index:10000;background:#fff;display:flex;flex-direction:column";
+  var bar = document.createElement("div");
+  bar.style.cssText = "flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0F766E;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)";
+  bar.innerHTML = '<button onclick="document.getElementById(\'bilan-overlay\').remove()" style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;font-family:inherit">← Retour</button><b style="flex:1;font-size:14px">Mon bilan complet</b>';
+  var fr = document.createElement("iframe");
+  fr.style.cssText = "flex:1;border:none;width:100%;background:#fff";
+  ov.appendChild(bar);
+  ov.appendChild(fr);
+  document.body.appendChild(ov);
+  fr.srcdoc = html;
 }
 
 // ── PWA : enregistrement du service worker ──
