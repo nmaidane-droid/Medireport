@@ -1096,6 +1096,56 @@ function uName(id){ const u=DB.users.find(x=>x.id===id); if(!u) return id; const
 function uShort(id){ const u=DB.users.find(x=>x.id===id); if(!u) return id; const titre=u.titre||"Dr."; return `${titre} ${u.nom}`; }
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function uid(){ return "x"+Math.random().toString(36).slice(2,9); }
+// ═══ Sélecteur de date unifié : Jour ▾ / Mois ▾ / Année (saisie) ═══
+const _D3_MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function date3HTML(id, iso, opts={}){
+  // iso: "yyyy-mm-dd" ou "" ; opts: {minY, maxY, todayBtn}
+  const now = new Date();
+  const minY = opts.minY || 1900;
+  const maxY = opts.maxY || now.getFullYear() + (opts.future ? 5 : 0);
+  let j="", m="", a="";
+  const mt = String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(mt){ a=mt[1]; m=mt[2]; j=String(+mt[3]); }
+  const jours = Array.from({length:31},(_,i)=>`<option value="${i+1}"${String(i+1)===j?" selected":""}>${i+1}</option>`).join("");
+  const mois = _D3_MOIS.map((n,i)=>{const v=String(i+1).padStart(2,"0");return `<option value="${v}"${v===m?" selected":""}>${n}</option>`;}).join("");
+  return `<input type="hidden" id="${id}" value="${mt?iso:""}" data-miny="${minY}" data-maxy="${maxY}"/>
+  <div style="display:flex;gap:6px;align-items:center">
+    <select id="${id}-j" onchange="_d3sync('${id}')" style="flex:0 0 64px"><option value="">JJ</option>${jours}</select>
+    <select id="${id}-m" onchange="_d3sync('${id}')" style="flex:1;min-width:0"><option value="">Mois</option>${mois}</select>
+    <input id="${id}-a" type="text" inputmode="numeric" maxlength="4" placeholder="AAAA" value="${a}"
+      oninput="this.value=this.value.replace(/\D/g,'').slice(0,4);_d3sync('${id}')" style="flex:0 0 70px;text-align:center"/>
+    ${opts.todayBtn?`<button type="button" class="btn bs bsm" onclick="_d3set('${id}',new Date().toISOString().slice(0,10))" style="flex-shrink:0;padding:8px 10px">Auj.</button>`:""}
+  </div>`;
+}
+
+function _d3sync(id){
+  const h = G(id); if(!h) return;
+  const j = G(id+"-j")?.value, m = G(id+"-m")?.value, a = G(id+"-a")?.value;
+  const aEl = G(id+"-a");
+  if(!j || !m || !a || a.length !== 4){ h.value = ""; if(aEl) aEl.style.borderColor = ""; return; }
+  const y = +a, minY = +h.dataset.miny, maxY = +h.dataset.maxy;
+  const d = new Date(y, +m-1, +j);
+  const valid = y >= minY && y <= maxY && d.getFullYear() === y && d.getMonth() === +m-1 && d.getDate() === +j;
+  if(!valid){
+    h.value = "";
+    if(aEl) aEl.style.borderColor = "var(--red)";
+    return;
+  }
+  if(aEl) aEl.style.borderColor = "";
+  h.value = a + "-" + m + "-" + String(j).padStart(2,"0");
+}
+
+function _d3set(id, iso){
+  const h = G(id); if(!h) return;
+  const mt = String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!mt){ h.value=""; return; }
+  h.value = iso;
+  if(G(id+"-j")) G(id+"-j").value = String(+mt[3]);
+  if(G(id+"-m")) G(id+"-m").value = mt[2];
+  if(G(id+"-a")) G(id+"-a").value = mt[1];
+}
+
 function generatePIN(){
   return Array.from({length:6},()=>Math.floor(Math.random()*10)).join("");
 }
@@ -3094,7 +3144,7 @@ function showOcrLaboModal(pid){
         <div style="font-size:12px;font-weight:700;color:var(--g600);margin-bottom:8px">SAISIE MANUELLE</div>
         <div id="manual-bilan-form">
           <div class="fr" style="gap:8px;margin-bottom:8px">
-            <div class="fg"><label>Date du bilan</label><input id="m-date" type="date" value="${today()}"/></div>
+            <div class="fg"><label>Date du bilan</label>${date3HTML('m-date',new Date().toISOString().slice(0,10),{minY:1990,todayBtn:true})}</div>
             <div class="fg"><label>Commentaire</label><input id="m-comment" placeholder="Bilan mensuel IRC..."/></div>
           </div>
           <div id="manual-rows">
@@ -3131,7 +3181,7 @@ function showOcrLaboModal(pid){
         ✅ Extraction réussie — vérifiez et corrigez si nécessaire
       </div>
       <div class="fr" style="gap:8px;margin-bottom:10px">
-        <div class="fg"><label>Date du bilan</label><input id="ocr-date" type="date"/></div>
+        <div class="fg"><label>Date du bilan</label>${date3HTML('ocr-date','',{minY:1990,todayBtn:true})}</div>
         <div class="fg"><label>Commentaire / Type</label><input id="ocr-comment" placeholder="Bilan mensuel IRC..."/></div>
       </div>
       <div id="ocr-results-table" style="overflow-x:auto">
@@ -3811,7 +3861,7 @@ function showAddConsult(pid){
     if(s.includes("gynéco")||s.includes("gyneco")||s.includes("obstétr")||s.includes("obstetr")){
       return `<div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👩 Paramètres gynécologiques</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-        <div class="fg" style="margin:0"><label>DDR (dernières règles)</label><input id="fc-ddr" type="date"/></div>
+        <div class="fg" style="margin:0"><label>DDR (dernières règles)</label>${date3HTML('fc-ddr','',{minY:1990,todayBtn:true})}</div>
         <div class="fg" style="margin:0"><label>Cycles</label><select id="fc-cycle"><option value="">—</option><option>Réguliers</option><option>Irréguliers</option><option>Aménorrhée</option><option>Ménopause</option></select></div>
         <div class="fg" style="margin:0"><label>Gestité / Parité</label><input id="fc-gesta" placeholder="Ex : G2P1"/></div>
         <div class="fg" style="margin:0"><label>Contraception</label><select id="fc-contra"><option value="">—</option><option>Aucune</option><option>Pilule</option><option>DIU cuivre</option><option>DIU hormonal</option><option>Implant</option><option>Préservatif</option><option>Autre</option></select></div>
@@ -4272,7 +4322,7 @@ function showAddImagerieModal(pid){
           </optgroup>
         </select>
       </div>
-      <div class="fg"><label>Date de l'examen</label><input id="img-date" type="date" value="${new Date().toISOString().split('T')[0]}"/></div>
+      <div class="fg"><label>Date de l'examen</label>${date3HTML('img-date',new Date().toISOString().slice(0,10),{minY:1990,todayBtn:true})}</div>
     </div>
     <div class="fr">
       <div class="fg"><label>Centre d'imagerie</label>
@@ -4433,7 +4483,7 @@ Réponds UNIQUEMENT avec le JSON.` }
         if(o.text.toLowerCase().includes(info.region.toLowerCase())) rsel.value=o.value;
       });
     }
-    if(info.date) document.getElementById("img-date").value = info.date;
+    if(info.date) _d3set("img-date", info.date);
     if(info.compte_rendu) document.getElementById("img-cr").value = info.compte_rendu;
     if(info.conclusion) document.getElementById("img-res").value = info.conclusion;
     if(info.radiologue) document.getElementById("img-radio").value = info.radiologue;
@@ -4630,7 +4680,7 @@ function showAddRdv(pid){
       👤 <strong>${u.titre||"Dr."} ${u.prenom||""} ${u.nom}</strong> · Patient : <strong>${p.prenom} ${p.nom}</strong>
     </div>
     <div class="fr">
-      <div class="fg"><label>Date</label><input id="rv-d" type="date"/></div>
+      <div class="fg"><label>Date</label>${date3HTML('rv-d',new Date().toISOString().slice(0,10),{minY:1990,future:true,todayBtn:true})}</div>
       <div class="fg"><label>Heure</label><input id="rv-h" placeholder="09h00"/></div>
     </div>
     ${myAddrs.length > 1 ? `<div class="fg"><label>Lieu de consultation</label>
@@ -4754,7 +4804,7 @@ function dAccesPat(){
 
 function delAccess(aid,pid){DB.access=DB.access.filter(a=>a.id!==aid);saveDB(DB);dAccesPat();}
 
-function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label><input id="ac-ex" type="date"/></div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){toast("Sélectionnez un utilisateur","warning");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;const newAcc={id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""};DB.access.push(newAcc);saveDB(DB,{table:"patient_access",rows:[newAcc]});ov.remove();dAccesPat();};}
+function showAddAccess(pid){const ov=modal(`<div class="mb"><div class="mh"><span class="mt2">Accorder un accès</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod"><div class="fg"><label>Utilisateur</label><div id="ac-u-sd"></div></div><div class="fg"><label>Type d'accès</label><select id="ac-t"><option value="orientation">Orientation médicale</option><option value="prescription">Prescription / Analyse</option><option value="consentement">Consentement patient</option></select></div><div class="fg"><label>Modules autorisés</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">${["consultations","labo","imagerie","prescriptions","vitaux","rdv"].map(m=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--g700);cursor:pointer"><input type="checkbox" id="ac-m-${m}" checked style="width:auto;padding:0"/> ${m.charAt(0).toUpperCase()+m.slice(1)}</label>`).join("")}</div></div><div class="fr"><div class="fg"><label>Motif</label><input id="ac-mo" placeholder="Ex: Suivi cardiologique"/></div><div class="fg"><label>Expiration</label>${date3HTML('ac-ex','',{minY:1990,future:true})}</div></div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ac-s">Accorder</button></div></div>`);const acUserSd=new SearchableDropdown("ac-u-sd",userOptions(["medecin","specialiste","laboratoire","imagerie"]),null,"Rechercher un professionnel...");ov.querySelector("#ac-s").onclick=()=>{const uid2=acUserSd.getValue();if(!uid2){toast("Sélectionnez un utilisateur","warning");return;}const mods=["consultations","labo","imagerie","prescriptions","vitaux","rdv"].filter(m=>G("ac-m-"+m)?.checked);const exp=G("ac-ex").value?new Date(G("ac-ex").value).toLocaleDateString("fr-FR"):null;const newAcc={id:uid(),patientId:pid,userId:uid2,type:G("ac-t").value,date:today(),modules:mods,expiry:exp,motif:G("ac-mo").value||""};DB.access.push(newAcc);saveDB(DB,{table:"patient_access",rows:[newAcc]});ov.remove();dAccesPat();};}
 
 function rAgenda(){
   const u=currentUser;
@@ -5274,7 +5324,7 @@ function showAddPatient(){
     </div>
     <div class="fr">
       <div class="fg"><label>Prénom</label><input id="sr-pr" placeholder="Prénom" autocomplete="off"/></div>
-      <div class="fg"><label>Date de naissance</label><input id="sr-dob" type="date"/></div>
+      <div class="fg"><label>Date de naissance</label>${date3HTML('sr-dob','')}</div>
     </div>
     <div id="sr-result" style="margin-top:10px"></div>
   </div>
@@ -5370,7 +5420,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
   const ov2=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouveau dossier patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
     <div class="fr"><div class="fg"><label>Prénom <span style="color:var(--red)">*</span></label><input id="np-pr" value="${prePr}"/></div><div class="fg"><label>Nom <span style="color:var(--red)">*</span></label><input id="np-nm" value="${preNm}"/></div></div>
     <div class="fr3">
-      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label><input id="np-dob" type="date" value="${preDob}"/></div>
+      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label>${date3HTML('np-dob',preDob)}</div>
       <div class="fg"><label>Sexe <span style="color:var(--red)">*</span></label><select id="np-sx"><option value="">— Choisir —</option><option value="M">Homme</option><option value="F">Femme</option></select></div>
       <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="np-gr"><option value="">— Inconnu —</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
     </div>
@@ -5469,7 +5519,7 @@ function showEditPatient(pid){
   const ov=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Modifier — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
     <div class="fr"><div class="fg"><label>Prénom <span style="color:var(--red)">*</span></label><input id="ep-pr" value="${p.prenom||""}"/></div><div class="fg"><label>Nom <span style="color:var(--red)">*</span></label><input id="ep-nm" value="${p.nom||""}"/></div></div>
     <div class="fr3">
-      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label><input id="ep-dob" type="date" value="${dobISO}"/></div>
+      <div class="fg"><label>Date de naissance <span style="color:var(--red)">*</span></label>${date3HTML('ep-dob',dobISO)}</div>
       <div class="fg"><label>Sexe <span style="color:var(--red)">*</span></label><select id="ep-sx"><option value="">— Choisir —</option><option value="M"${p.sexe==="M"?" selected":""}>Homme</option><option value="F"${p.sexe==="F"?" selected":""}>Femme</option></select></div>
       <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="ep-gr"><option value="">— Inconnu —</option><option${p.groupe==="A+"?" selected":""}>A+</option><option${p.groupe==="A-"?" selected":""}>A-</option><option${p.groupe==="B+"?" selected":""}>B+</option><option${p.groupe==="B-"?" selected":""}>B-</option><option${p.groupe==="AB+"?" selected":""}>AB+</option><option${p.groupe==="AB-"?" selected":""}>AB-</option><option${p.groupe==="O+"?" selected":""}>O+</option><option${p.groupe==="O-"?" selected":""}>O-</option></select></div>
     </div>
