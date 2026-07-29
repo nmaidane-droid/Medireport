@@ -884,6 +884,7 @@ async function syncChanged(changed){
     color:p.color||"#1A6EFF", initials:p.initials||null,
     dialyse:p.dialyse||false, seances_semaine:p.seances_semaine||null,
     type_acces:p.type_acces||null, consentement:p.consentement||null,
+    naissance:p.naissance||null,
     user_id:p.userId||p.user_id||null
   }));
   else if(table==="users") data = rows.map(u=>({
@@ -2703,6 +2704,79 @@ function printCarnetVaxIdx(pid){
   if(w){w.document.write(html);w.document.close();}
 }
 
+function birthCardsHtml(p, canWrite){
+  const n=p.naissance||null;
+  const editBtn = canWrite ? `<button class="btn bs bsm" onclick="showEditNaissance()">✏️ ${n?"Modifier":"Compléter la naissance"}</button>` : "";
+  if(!n) return `<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">👶</span> Naissance & premiers mois</div>
+    <div style="font-size:12.5px;color:var(--g400);margin-bottom:${canWrite?"10px":"0"}">Informations de naissance non renseignées.</div>${editBtn}</div>`;
+  const cell=(l,v)=>v?`<div style="background:var(--g50);border-radius:9px;padding:8px 10px"><div style="font-size:9px;font-weight:800;color:var(--g400);letter-spacing:.5px;text-transform:uppercase">${l}</div><div style="font-size:13px;font-weight:700;margin-top:2px">${v}</div></div>`:"";
+  const d=n.depistages||{};
+  const depRow=(nom,o)=>{
+    if(!o||!o.resultat) return "";
+    const ok=String(o.resultat).toLowerCase().includes("normal");
+    return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed var(--g200);font-size:12.5px">
+      <span style="font-weight:800;color:${ok?"#16A34A":"#B4001A"}">${ok?"✓":"⚠"}</span> ${nom}
+      <span style="margin-left:auto;color:var(--g400);font-size:11px">${o.date?o.date+" · ":""}${o.resultat}</span></div>`;
+  };
+  const a=n.alimentation||{};
+  let h=`<div class="card" style="margin-bottom:14px;border:1.5px solid #C6E9E4;background:linear-gradient(180deg,#F0FDFA 0%,#fff 45%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="ctit" style="margin-bottom:0"><span class="ci">👶</span> Naissance</div>${editBtn}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      ${cell("Terme",n.terme)}${cell("Accouchement",n.accouchement)}${cell("Apgar",n.apgar)}
+      ${cell("Poids naissance",n.poids)}${cell("Taille naissance",n.taille)}${cell("PC naissance",n.pc)}
+    </div>${n.lieu?`<div style="font-size:11.5px;color:var(--g400);margin-top:8px">📍 ${n.lieu}</div>`:""}</div>`;
+  const deps=depRow("Hypothyroïdie (test au buvard)",d.hypothyroidie)+depRow("Audition",d.audition)+depRow("Hanches (Ortolani)",d.hanches)+depRow("Reflet pupillaire",d.reflet);
+  if(deps) h+=`<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">🔬</span> Dépistages néonataux</div>${deps}</div>`;
+  if(a.allaitement||a.diversification||a.vitd||a.fer)
+    h+=`<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">🍼</span> Alimentation & supplémentation</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${cell("Allaitement",a.allaitement)}${cell("Diversification",a.diversification)}${cell("Vitamine D",a.vitd)}${cell("Fer",a.fer)}
+    </div></div>`;
+  return h;
+}
+
+function showEditNaissance(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const n=p.naissance||{}; const d=n.depistages||{}; const a=n.alimentation||{};
+  const dep=(id,o)=>`<div class="fr"><div class="fg"><label>${id==="hypothyroidie"?"Hypothyroïdie (buvard)":id==="audition"?"Audition":id==="hanches"?"Hanches (Ortolani)":"Reflet pupillaire"}</label>
+    <select id="ns-${id}"><option value=""${!(o&&o.resultat)?" selected":""}>Non renseigné</option><option${o&&o.resultat==="Normal"?" selected":""}>Normal</option><option${o&&o.resultat==="Anormal"?" selected":""}>Anormal</option><option${o&&o.resultat==="Non fait"?" selected":""}>Non fait</option></select></div>
+    <div class="fg"><label>Date</label><input id="nd-${id}" value="${(o&&o.date)||""}" placeholder="JJ/MM/AAAA"/></div></div>`;
+  modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">👶 Naissance & premiers mois — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Naissance</div>
+    <div class="fr"><div class="fg"><label>Terme</label><input id="n-terme" value="${n.terme||""}" placeholder="Ex : 39 SA — à terme"/></div>
+    <div class="fg"><label>Accouchement</label><select id="n-acc"><option value=""${!n.accouchement?" selected":""}>—</option><option${n.accouchement==="Voie basse"?" selected":""}>Voie basse</option><option${n.accouchement==="Césarienne"?" selected":""}>Césarienne</option></select></div></div>
+    <div class="fr"><div class="fg"><label>Poids de naissance</label><input id="n-pds" value="${n.poids||""}" placeholder="Ex : 3,400 kg"/></div>
+    <div class="fg"><label>Taille</label><input id="n-taille" value="${n.taille||""}" placeholder="Ex : 51 cm"/></div></div>
+    <div class="fr"><div class="fg"><label>Périmètre crânien</label><input id="n-pc" value="${n.pc||""}" placeholder="Ex : 35 cm"/></div>
+    <div class="fg"><label>Apgar (1 / 5 min)</label><input id="n-apgar" value="${n.apgar||""}" placeholder="Ex : 9 / 10"/></div></div>
+    <div class="fg"><label>Lieu de naissance</label><input id="n-lieu" value="${n.lieu||""}" placeholder="Ex : Clinique Atlas, Casablanca"/></div>
+    <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Dépistages néonataux</div>
+    ${dep("hypothyroidie",d.hypothyroidie)}${dep("audition",d.audition)}${dep("hanches",d.hanches)}${dep("reflet",d.reflet)}
+    <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Alimentation & supplémentation</div>
+    <div class="fr"><div class="fg"><label>Allaitement</label><input id="n-all" value="${a.allaitement||""}" placeholder="Ex : Maternel — en cours"/></div>
+    <div class="fg"><label>Diversification</label><input id="n-div" value="${a.diversification||""}" placeholder="Ex : Début 20/06/2026"/></div></div>
+    <div class="fr"><div class="fg"><label>Vitamine D</label><input id="n-vitd" value="${a.vitd||""}" placeholder="Ex : 400 UI/jour"/></div>
+    <div class="fg"><label>Fer</label><input id="n-fer" value="${a.fer||""}" placeholder="Si prescrit"/></div></div>
+    </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" onclick="saveNaissance()">Enregistrer</button></div></div>`);
+}
+
+function saveNaissance(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const v=id=>{const el=G(id);return el?_xssClean(el.value.trim()):"";};
+  const depO=id=>{const r=v("ns-"+id);if(!r)return null;return {resultat:r,date:v("nd-"+id)||null};};
+  const n={
+    terme:v("n-terme")||null, accouchement:v("n-acc")||null,
+    poids:v("n-pds")||null, taille:v("n-taille")||null, pc:v("n-pc")||null,
+    apgar:v("n-apgar")||null, lieu:v("n-lieu")||null,
+    depistages:{hypothyroidie:depO("hypothyroidie"),audition:depO("audition"),hanches:depO("hanches"),reflet:depO("reflet")},
+    alimentation:{allaitement:v("n-all")||null,diversification:v("n-div")||null,vitd:v("n-vitd")||null,fer:v("n-fer")||null}
+  };
+  p.naissance=n;
+  saveDB(DB,{table:"patients",rows:[p]});
+  document.querySelectorAll(".mov").forEach(m=>m.remove());
+  toast("Naissance enregistrée ✓"); switchDossierTab("carnet");
+}
+
 function printCarnetSante(pid){
   const p=DB.patients.find(x=>x.id===pid);
   const ai=ageInfoX(p.dob);
@@ -2736,7 +2810,15 @@ function printCarnetSante(pid){
     .sig{margin-top:28px;display:flex;justify-content:space-between;font-size:12px}
     @media print{.noprint{display:none}}</style></head><body>
     <h1>📔 Carnet de santé</h1><div class="sub">MediReport Pro · édité le ${_fmtFRx(new Date())}</div>
-    <div class="id"><b>${p.prenom} ${p.nom}</b> · Né(e) le ${p.dob||"—"} (${ai.label})${p.groupe?" · Groupe "+p.groupe:""}${p.cin?" · CIN "+p.cin:""}${p.ville?" · "+p.ville:""}</div>
+    <div class="id"><b>${p.prenom} ${p.nom}</b> · Né(e) le ${p.dob||"—"} (${ai.label})${p.groupe?" · Groupe "+p.groupe:""}${p.cin?" · CIN "+p.cin:""}${p.ville?" · "+p.ville:""}${p.naissance&&p.naissance.lieu?" · "+p.naissance.lieu:""}</div>
+    ${p.naissance?`<h2>👶 Naissance</h2><table><tr><th>Terme</th><th>Accouchement</th><th>Poids</th><th>Taille</th><th>PC</th><th>Apgar</th></tr>
+    <tr><td>${p.naissance.terme||"—"}</td><td>${p.naissance.accouchement||"—"}</td><td>${p.naissance.poids||"—"}</td><td>${p.naissance.taille||"—"}</td><td>${p.naissance.pc||"—"}</td><td>${p.naissance.apgar||"—"}</td></tr></table>
+    ${(()=>{const d=p.naissance.depistages||{};const r=(nom,o)=>o&&o.resultat?`<tr><td>${nom}</td><td>${o.date||"—"}</td><td>${o.resultat}</td></tr>`:"";
+      const rows=r("Hypothyroïdie",d.hypothyroidie)+r("Audition",d.audition)+r("Hanches (Ortolani)",d.hanches)+r("Reflet pupillaire",d.reflet);
+      return rows?`<h2>🔬 Dépistages néonataux</h2><table><tr><th>Dépistage</th><th>Date</th><th>Résultat</th></tr>${rows}</table>`:"";})()}
+    ${(()=>{const a=p.naissance.alimentation||{};if(!(a.allaitement||a.diversification||a.vitd||a.fer))return "";
+      return `<h2>🍼 Alimentation & supplémentation</h2><table><tr><th>Allaitement</th><th>Diversification</th><th>Vitamine D</th><th>Fer</th></tr>
+      <tr><td>${a.allaitement||"—"}</td><td>${a.diversification||"—"}</td><td>${a.vitd||"—"}</td><td>${a.fer||"—"}</td></tr></table>`;})()}`:""}
     <h2>⚖️ Poids</h2>${svgOf("w","#0F766E")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
     <h2>📏 Taille</h2>${svgOf("t","#1A6EFF")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
     <h2>⭕ Périmètre crânien</h2>${svgOf("pc","#7C3AED")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
@@ -2780,6 +2862,7 @@ function dCarnet(){
   const lastDev=devs.length?devs[devs.length-1]:null;
   G("dossier-content").innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:800">📔 Carnet de santé — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div><button class="btn bs bsm" onclick="printCarnetSante('${p.id}')">🖨️ Imprimer le carnet</button></div>
+    ${birthCardsHtml(p, ["admin","medecin","specialiste"].includes(currentUser.role))}
     ${chart(meas.map(m=>({v:m.w,d:m.date})),"#0F766E","kg","⚖️ Poids")}
     ${chart(meas.map(m=>({v:m.t,d:m.date})),"#1A6EFF","cm","📏 Taille")}
     ${chart(meas.map(m=>({v:m.pc,d:m.date})),"#7C3AED","cm","⭕ Périmètre crânien")}
