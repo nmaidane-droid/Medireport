@@ -914,7 +914,7 @@ function tabSyn() {
   });
   if(p.dialyse) h+='<div class="ale ale-b"><span>💧</span><div><strong>Hémodialyse</strong> · '+p.seances_semaine+' séances/sem.</div></div>';
   h+='<div class="card"><div class="ctit">👤 Mes informations</div><div class="igrid">';
-  [["Naissance",p.dob],["Âge",(p.age||"?")+" ans"],["Groupe",p.groupe||"?"],["CIN",p.cin||"—"],["Téléphone",p.tel||"—"],["Ville",p.ville||"—"]].forEach(function(x){
+  [["Naissance",p.dob],["Âge",ageInfo(p.dob).months!==null?ageInfo(p.dob).label:(p.age||"?")+" ans"],["Groupe",p.groupe||"?"],["CIN",p.cin||"—"],["Téléphone",p.tel||"—"],["Ville",p.ville||"—"]].forEach(function(x){
     h+='<div class="ii"><div class="ilbl">'+x[0]+'</div><div class="ival">'+(x[1]||"—")+'</div></div>';
   });
   h+='</div>';
@@ -1364,7 +1364,7 @@ function printBilanMobile() {
     +'<div class="pat-grid">'
     +'<div><div class="pat-lbl">Date de naissance</div><div class="pat-val">'+(p.dob||"—")+'</div></div>'
     +'<div><div class="pat-lbl">Groupe sanguin</div><div class="pat-val">'+(p.groupe||"—")+'</div></div>'
-    +'<div><div class="pat-lbl">Age</div><div class="pat-val">'+(p.age||"—")+' ans</div></div>'
+    +'<div><div class="pat-lbl">Age</div><div class="pat-val">'+(ageInfo(p.dob).months!==null?ageInfo(p.dob).label:(p.age||"—")+" ans")+'</div></div>'
     +'<div><div class="pat-lbl">Ville</div><div class="pat-val">'+(p.ville||"—")+'</div></div>'
     +'</div></div>';
 
