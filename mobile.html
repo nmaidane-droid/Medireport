@@ -842,6 +842,65 @@ function printCarnetVax(){
   fr.srcdoc=html;
 }
 
+function printCarnetSanteM(){
+  var p=PAT, ai=ageInfo(p.dob);
+  var cons=sortByDate(DB.consultations[p.id]||[], 'date', true);
+  var meas=[];
+  cons.forEach(function(c){
+    var ct=c.constantes||{};
+    var w=parseFloat(String(ct["Poids"]||"").replace(",", "."));
+    var t=parseFloat(String(ct["Taille"]||"").replace(",", "."));
+    var pc=parseFloat(String(ct["PC"]||"").replace(",", "."));
+    if(!isNaN(w)||!isNaN(t)||!isNaN(pc)) meas.push({date:c.date,w:isNaN(w)?null:w,t:isNaN(t)?null:t,pc:isNaN(pc)?null:pc});
+  });
+  function svgOf(key,color){
+    var pts=meas.filter(function(m){return m[key]!==null;}).map(function(m){return {v:m[key],d:m.date};});
+    if(pts.length<2) return "";
+    var vmin=Math.min.apply(null,pts.map(function(x){return x.v;})),vmax=Math.max.apply(null,pts.map(function(x){return x.v;}));
+    var rng=(vmax-vmin)||1,sw=460,sh=80;
+    return '<svg viewBox="0 0 '+sw+' '+sh+'" style="width:100%;height:80px;background:#FAFAF9;border:1px solid #E7E5E4;border-radius:6px"><polyline points="'+
+      pts.map(function(pp,i){return (14+i*(sw-28)/(pts.length-1)).toFixed(1)+","+(sh-12-(pp.v-vmin)/rng*(sh-24)).toFixed(1);}).join(" ")+
+      '" fill="none" stroke="'+color+'" stroke-width="2.4"/>'+
+      pts.map(function(pp,i){var x=(14+i*(sw-28)/(pts.length-1)).toFixed(1),y=(sh-12-(pp.v-vmin)/rng*(sh-24)).toFixed(1);
+        return '<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="'+color+'"/><text x="'+x+'" y="'+(y-5)+'" font-size="9" text-anchor="middle" fill="#57534E">'+pp.v+'</text>';}).join("")+'</svg>';
+  }
+  var rows=meas.map(function(m){return '<tr><td>'+m.date+'</td><td>'+(m.w!==null?m.w+" kg":"—")+'</td><td>'+(m.t!==null?m.t+" cm":"—")+'</td><td>'+(m.pc!==null?m.pc+" cm":"—")+'</td></tr>';}).join('');
+  var devs=cons.filter(function(c){return c.constantes&&c.constantes["Développement"];});
+  var lastDev=devs.length?devs[devs.length-1]:null;
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carnet de santé</title><style>'+
+    'body{font-family:Helvetica,Arial,sans-serif;margin:24px;color:#1C1917}'+
+    'h1{font-size:19px;color:#0F766E;margin-bottom:2px} .sub{font-size:11px;color:#78716C;margin-bottom:14px}'+
+    '.id{background:#F0FDFA;border:1px solid #C6E9E4;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px}'+
+    'h2{font-size:13px;margin:16px 0 5px;color:#115E59} table{width:100%;border-collapse:collapse;font-size:11px;margin-top:5px}'+
+    'th{background:#0F766E;color:#fff;text-align:left;padding:6px 8px} td{padding:5px 8px;border-bottom:1px solid #E7E5E4}'+
+    '.dev{background:#FAFAF9;border:1px solid #E7E5E4;border-radius:8px;padding:9px 11px;font-size:12px}'+
+    '.foot{margin-top:22px;font-size:9px;color:#78716C;text-align:center}'+
+    '.sig{margin-top:24px;display:flex;justify-content:space-between;font-size:11px}'+
+    '@media print{.noprint{display:none}}</style></head><body>'+
+    '<h1>📔 Carnet de santé</h1><div class="sub">MediReport · édité le '+_fmtFR(new Date())+'</div>'+
+    '<div class="id"><b>'+p.prenom+' '+p.nom+'</b> · Né(e) le '+(p.dob||"—")+' ('+ai.label+')'+(p.groupe?' · Groupe '+p.groupe:'')+'</div>'+
+    '<h2>⚖️ Poids</h2>'+(svgOf("w","#0F766E")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>')+
+    '<h2>📏 Taille</h2>'+(svgOf("t","#1A6EFF")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>')+
+    '<h2>⭕ Périmètre crânien</h2>'+(svgOf("pc","#7C3AED")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>')+
+    '<h2>Mesures détaillées</h2><table><tr><th>Date</th><th>Poids</th><th>Taille</th><th>PC</th></tr>'+(rows||'<tr><td colspan="4">Aucune mesure</td></tr>')+'</table>'+
+    (lastDev?'<h2>🚼 Développement</h2><div class="dev">'+lastDev.constantes["Développement"]+' <span style="color:#78716C">— évalué le '+lastDev.date+'</span></div>':'')+
+    '<div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>'+
+    '<div class="foot">MediReport · 🇲🇦 Conçu au Maroc · Document confidentiel · Courbes OMS : prochaine évolution</div>'+
+    '<button class="noprint" onclick="window.print()" style="margin-top:18px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button>'+
+    '</body></html>';
+  var ov=document.createElement("div");
+  ov.id="carnet-overlay";
+  ov.style.cssText="position:fixed;inset:0;z-index:10000;background:#fff;display:flex;flex-direction:column";
+  var bar=document.createElement("div");
+  bar.style.cssText="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0F766E;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)";
+  bar.innerHTML='<button onclick="document.getElementById(\'carnet-overlay\').remove()" style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;font-family:inherit">← Retour</button><b style="flex:1;font-size:14px">Carnet de santé</b>';
+  var fr=document.createElement("iframe");
+  fr.style.cssText="flex:1;border:none;width:100%;background:#fff";
+  ov.appendChild(bar); ov.appendChild(fr);
+  document.body.appendChild(ov);
+  fr.srcdoc=html;
+}
+
 function tabCarnet(){
   var p=PAT, ai=ageInfo(p.dob);
   var cons=sortByDate(DB.consultations[p.id]||[], 'date', true); // asc
@@ -884,7 +943,8 @@ function tabCarnet(){
     h+='<div class="card"><div class="ctit">🚼 Développement</div><div style="font-size:13px">'+lastD.constantes["Développement"]+'</div>'+
       '<div style="font-size:10.5px;color:#A8A29E;margin-top:3px">Évalué le '+lastD.date+'</div></div>';
   }
-  h+='<div style="font-size:10px;color:#A8A29E;text-align:center;margin-top:8px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>';
+  h+='<button onclick="printCarnetSanteM()" style="width:100%;background:#0F766E;color:#fff;border:none;border-radius:13px;padding:14px;font-size:14px;font-weight:800;font-family:inherit;margin-top:4px">🖨️ Imprimer le carnet de santé</button>';
+  h+='<div style="font-size:10px;color:#A8A29E;text-align:center;margin-top:10px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>';
   return h;
 }
 

@@ -2703,6 +2703,53 @@ function printCarnetVaxIdx(pid){
   if(w){w.document.write(html);w.document.close();}
 }
 
+function printCarnetSante(pid){
+  const p=DB.patients.find(x=>x.id===pid);
+  const ai=ageInfoX(p.dob);
+  const cons=sortByDate(DB.consultations[p.id]||[], 'date', true);
+  const meas=[];
+  cons.forEach(c=>{
+    const ct=c.constantes||{};
+    const w=parseFloat(String(ct["Poids"]||"").replace(",", "."));
+    const t=parseFloat(String(ct["Taille"]||"").replace(",", "."));
+    const pc=parseFloat(String(ct["PC"]||"").replace(",", "."));
+    if(!isNaN(w)||!isNaN(t)||!isNaN(pc)) meas.push({date:c.date,w:isNaN(w)?null:w,t:isNaN(t)?null:t,pc:isNaN(pc)?null:pc});
+  });
+  const svgOf=(key,color)=>{
+    const pts=meas.filter(m=>m[key]!==null).map(m=>({v:m[key],d:m.date}));
+    if(pts.length<2) return "";
+    const vmin=Math.min(...pts.map(x=>x.v)),vmax=Math.max(...pts.map(x=>x.v));
+    const rng=(vmax-vmin)||1,sw=460,sh=80;
+    return `<svg viewBox="0 0 ${sw} ${sh}" style="width:100%;height:80px;background:#FAFAF9;border:1px solid #E7E5E4;border-radius:6px"><polyline points="${pts.map((pp,i)=>`${(14+i*(sw-28)/(pts.length-1)).toFixed(1)},${(sh-12-(pp.v-vmin)/rng*(sh-24)).toFixed(1)}`).join(" ")}" fill="none" stroke="${color}" stroke-width="2.4"/>${pts.map((pp,i)=>`<circle cx="${(14+i*(sw-28)/(pts.length-1)).toFixed(1)}" cy="${(sh-12-(pp.v-vmin)/rng*(sh-24)).toFixed(1)}" r="3.5" fill="${color}"/><text x="${(14+i*(sw-28)/(pts.length-1)).toFixed(1)}" y="${(sh-16-(pp.v-vmin)/rng*(sh-24)).toFixed(1)}" font-size="9" text-anchor="middle" fill="#57534E">${pp.v}</text>`).join("")}</svg>`;
+  };
+  const rows=meas.map(m=>`<tr><td>${m.date}</td><td>${m.w!==null?m.w+" kg":"—"}</td><td>${m.t!==null?m.t+" cm":"—"}</td><td>${m.pc!==null?m.pc+" cm":"—"}</td></tr>`).join("");
+  const devs=cons.filter(c=>c.constantes&&c.constantes["Développement"]);
+  const lastDev=devs.length?devs[devs.length-1]:null;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carnet de santé — ${p.prenom} ${p.nom}</title><style>
+    body{font-family:Helvetica,Arial,sans-serif;margin:30px;color:#1C1917}
+    h1{font-size:20px;color:#0F766E;margin-bottom:2px} .sub{font-size:11px;color:#78716C;margin-bottom:16px}
+    .id{background:#F0FDFA;border:1px solid #C6E9E4;border-radius:8px;padding:12px 14px;font-size:12.5px;margin-bottom:16px}
+    h2{font-size:14px;margin:18px 0 6px;color:#115E59} table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
+    th{background:#0F766E;color:#fff;text-align:left;padding:7px 9px} td{padding:6px 9px;border-bottom:1px solid #E7E5E4}
+    .dev{background:#FAFAF9;border:1px solid #E7E5E4;border-radius:8px;padding:10px 12px;font-size:12.5px}
+    .foot{margin-top:26px;font-size:9px;color:#78716C;text-align:center}
+    .sig{margin-top:28px;display:flex;justify-content:space-between;font-size:12px}
+    @media print{.noprint{display:none}}</style></head><body>
+    <h1>📔 Carnet de santé</h1><div class="sub">MediReport Pro · édité le ${_fmtFRx(new Date())}</div>
+    <div class="id"><b>${p.prenom} ${p.nom}</b> · Né(e) le ${p.dob||"—"} (${ai.label})${p.groupe?" · Groupe "+p.groupe:""}${p.cin?" · CIN "+p.cin:""}${p.ville?" · "+p.ville:""}</div>
+    <h2>⚖️ Poids</h2>${svgOf("w","#0F766E")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
+    <h2>📏 Taille</h2>${svgOf("t","#1A6EFF")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
+    <h2>⭕ Périmètre crânien</h2>${svgOf("pc","#7C3AED")||'<div style="font-size:11px;color:#78716C">Moins de 2 mesures</div>'}
+    <h2>Mesures détaillées</h2><table><tr><th>Date</th><th>Poids</th><th>Taille</th><th>PC</th></tr>${rows||'<tr><td colspan="4">Aucune mesure enregistrée</td></tr>'}</table>
+    ${lastDev?`<h2>🚼 Développement psychomoteur</h2><div class="dev">${lastDev.constantes["Développement"]} <span style="color:#78716C">— évalué le ${lastDev.date}</span></div>`:""}
+    <div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>
+    <div class="foot">MediReport Pro · 🇲🇦 Conçu au Maroc · Document confidentiel · Courbes de référence OMS : prochaine évolution</div>
+    <button class="noprint" onclick="window.print()" style="margin-top:20px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button>
+    </body></html>`;
+  const w=window.open("","_blank");
+  if(w){w.document.write(html);w.document.close();}
+}
+
 function dCarnet(){
   const p=DB.patients.find(x=>x.id===currentPatientId);
   const ai=ageInfoX(p.dob);
@@ -2732,7 +2779,7 @@ function dCarnet(){
   const devs=cons.filter(c=>c.constantes&&c.constantes["Développement"]);
   const lastDev=devs.length?devs[devs.length-1]:null;
   G("dossier-content").innerHTML=`
-    <div style="font-size:15px;font-weight:800;margin-bottom:14px">📔 Carnet de santé — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:800">📔 Carnet de santé — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div><button class="btn bs bsm" onclick="printCarnetSante('${p.id}')">🖨️ Imprimer le carnet</button></div>
     ${chart(meas.map(m=>({v:m.w,d:m.date})),"#0F766E","kg","⚖️ Poids")}
     ${chart(meas.map(m=>({v:m.t,d:m.date})),"#1A6EFF","cm","📏 Taille")}
     ${chart(meas.map(m=>({v:m.pc,d:m.date})),"#7C3AED","cm","⭕ Périmètre crânien")}
