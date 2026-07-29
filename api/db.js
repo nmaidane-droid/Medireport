@@ -6,7 +6,7 @@ const SB_URL = 'https://sfpjcqhaunkicllzvoba.supabase.co';
 const TABLES = new Set([
   'users', 'patients', 'patient_access', 'consultations', 'labos', 'prescriptions',
   'imagerie', 'rdv', 'demandes_labo', 'demandes_avis', 'demandes_acces',
-  'seen_items', 'notifications_vues', 'backups'
+  'seen_items', 'notifications_vues', 'backups', 'vaccins', 'patient_links'
 ]);
 
 function b64urlToBytes(s) {
@@ -64,16 +64,34 @@ export default async function handler(req) {
 
     const myPatientId = session.p;
     const myUserId = session.u;
+    // Compte famille : dossiers autorisés = le sien + les dossiers liés (pl, signés dans le token)
+    const allowedPids = [myPatientId, ...(Array.isArray(session.pl) ? session.pl : [])].filter(Boolean);
     const sep = effectivePath.includes('?') ? '&' : '?';
     const PATIENT_SCOPED = ['consultations', 'labos', 'prescriptions', 'imagerie', 'rdv',
-                            'patient_access', 'demandes_labo', 'demandes_avis', 'demandes_acces'];
+                            'patient_access', 'demandes_labo', 'demandes_avis', 'demandes_acces', 'vaccins'];
     if (PATIENT_SCOPED.includes(table)) {
-      if (!myPatientId) return json({ error: 'Accès refusé' }, 403);
-      // Le serveur FORCE le filtre — impossible de lire un autre dossier
-      effectivePath = effectivePath + sep + 'patient_id=eq.' + encodeURIComponent(myPatientId);
+      if (!allowedPids.length) return json({ error: 'Accès refusé' }, 403);
+      // Si le client demande un dossier précis, il doit être autorisé ; sinon on force le sien
+      const m = effectivePath.match(/[?&]patient_id=eq\.([^&]+)/);
+      if (m) {
+        if (!allowedPids.includes(decodeURIComponent(m[1]))) return json({ error: 'Accès refusé' }, 403);
+        // filtre déjà présent et légitime — on le laisse
+      } else {
+        effectivePath = effectivePath + sep + 'patient_id=eq.' + encodeURIComponent(myPatientId);
+      }
     } else if (table === 'patients') {
-      if (!myPatientId) return json({ error: 'Accès refusé' }, 403);
-      effectivePath = effectivePath + sep + 'id=eq.' + encodeURIComponent(myPatientId);
+      if (!allowedPids.length) return json({ error: 'Accès refusé' }, 403);
+      const m = effectivePath.match(/[?&]id=eq\.([^&]+)/);
+      if (m) {
+        if (!allowedPids.includes(decodeURIComponent(m[1]))) return json({ error: 'Accès refusé' }, 403);
+      } else {
+        // Sans filtre : renvoyer tous les dossiers autorisés (soi + enfants)
+        effectivePath = effectivePath + sep + 'id=in.(' + allowedPids.map(encodeURIComponent).join(',') + ')';
+      }
+    } else if (table === 'patient_links') {
+      // Lecture seule de SES propres liens
+      if (method !== 'GET') return json({ error: 'Accès refusé' }, 403);
+      effectivePath = 'patient_links?select=patient_id,relation,actif&user_id=eq.' + encodeURIComponent(myUserId) + '&actif=eq.true';
     } else if (table === 'users') {
       // Annuaire des professionnels : colonnes publiques UNIQUEMENT (select forcé,
       // le client ne peut pas demander pin/login/patient_id)
@@ -84,6 +102,12 @@ export default async function handler(req) {
   }
   // Table backups : admin uniquement
   if (table === 'backups' && role !== 'admin') return json({ error: 'Accès refusé' }, 403);
+  // Vaccins : écriture réservée aux soignants et à l'admin
+  if (table === 'vaccins' && method !== 'GET' && !['admin', 'medecin', 'specialiste'].includes(role))
+    return json({ error: 'Accès refusé' }, 403);
+  // Liens famille : gestion par soignants/admin (le patient ne peut que lire les siens)
+  if (table === 'patient_links' && method !== 'GET' && !['admin', 'medecin', 'specialiste'].includes(role))
+    return json({ error: 'Accès refusé' }, 403);
   // Écriture/suppression sur users : création autorisée aux pros (activation mobile), modification/suppression admin
   if (table === 'users') {
     if ((method === 'PATCH' || method === 'DELETE') && role !== 'admin')

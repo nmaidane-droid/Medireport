@@ -63,6 +63,25 @@ export default async function handler(req) {
   safeUser.patientId = user.patient_id || null;
   const payload = { u: user.id, r: user.role, e: Date.now() + TOKEN_TTL_MS };
   if (user.role === 'patient' && user.patient_id) payload.p = user.patient_id;
+
+  // ── Compte famille : dossiers liés (enfants) ──
+  safeUser.linkedPatients = [];
+  if (user.role === 'patient') {
+    try {
+      const lr = await fetch(SB_URL + '/rest/v1/patient_links?user_id=eq.' + encodeURIComponent(user.id)
+        + '&actif=eq.true&select=patient_id,relation', {
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK }
+      });
+      if (lr.ok) {
+        const links = await lr.json();
+        if (Array.isArray(links) && links.length) {
+          payload.pl = links.map(l => l.patient_id);
+          safeUser.linkedPatients = links;
+        }
+      }
+    } catch { /* table absente ou indisponible : mode mono-dossier */ }
+  }
+
   const token = await signToken(payload, SRK);
   return json({ token, user: safeUser });
 }
