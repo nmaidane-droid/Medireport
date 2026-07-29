@@ -148,7 +148,7 @@ button{font-family:inherit}
     <div style="text-align:center;font-size:11px;color:#94A3B8;margin-top:8px">🔒 Accès sécurisé CNDP&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;🇲🇦 Conçu au Maroc</div>
     <div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center">
       <a href="guide.pdf" target="_blank" style="display:inline-flex;align-items:center;gap:6px;color:#0F766E;font-size:12px;font-weight:700;text-decoration:none;border:1.5px solid #C6E9E4;background:#F0FDFA;border-radius:99px;padding:7px 14px;font-family:inherit">📘 Mode d'emploi</a>
-      <a href="guide.pdf" download="MediReport_Mode_Emploi.pdf" style="display:inline-flex;align-items:center;gap:6px;color:#0F766E;font-size:12px;font-weight:700;text-decoration:none;border:1.5px solid #C6E9E4;background:#fff;border-radius:99px;padding:7px 14px;font-family:inherit">⬇️ Télécharger</a>
+      <a href="guide.pdf" download="MediReport_Mode_Emploi.pdf" id="dl-guide" onclick="dlGuideFeedback(this)" style="display:inline-flex;align-items:center;gap:6px;color:#0F766E;font-size:12px;font-weight:700;text-decoration:none;border:1.5px solid #C6E9E4;background:#fff;border-radius:99px;padding:7px 14px;font-family:inherit;transition:all .2s">⬇️ Télécharger</a>
     </div>
   </div>
 </div>
@@ -188,6 +188,23 @@ button{font-family:inherit}
 </div>
 
 <script>
+function dlGuideFeedback(a){
+  if (a.dataset.busy) return;
+  a.dataset.busy = "1";
+  var orig = a.innerHTML;
+  a.innerHTML = "⏳ Téléchargement…";
+  a.style.background = "#F0FDFA"; a.style.pointerEvents = "none"; a.style.opacity = ".8";
+  setTimeout(function(){
+    a.innerHTML = "✓ Téléchargé — voir vos notifications";
+    a.style.background = "#0F766E"; a.style.color = "#fff"; a.style.borderColor = "#0F766E"; a.style.opacity = "1";
+    setTimeout(function(){
+      a.innerHTML = orig;
+      a.style.background = "#fff"; a.style.color = "#0F766E"; a.style.borderColor = "#C6E9E4"; a.style.pointerEvents = "auto";
+      delete a.dataset.busy;
+    }, 5000);
+  }, 1600);
+}
+
 // ── Fonctions de tri ──────────────────────────────────────
 function sortByDate(arr, field, asc) {
   field = field || 'date';
