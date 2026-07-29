@@ -757,7 +757,7 @@ function sortByDate(arr, field, asc) {
 
 async function loadDBFromSupabase(){
   try {
-    const [users, patients, access, consultations, labos, rdv, prescriptions, imagerie, demandesLabo, demandesAvis] = await Promise.all([
+    const [users, patients, access, consultations, labos, rdv, prescriptions, imagerie, demandesLabo, demandesAvis, vaccinsRows, patientLinks] = await Promise.all([
       supaFetch("users?select=*&order=id"),
       supaFetch("patients?select=*&order=id"),
       supaFetch("patient_access?select=*"),
@@ -768,6 +768,8 @@ async function loadDBFromSupabase(){
       supaFetch("imagerie?select=*&order=patient_id"),
       supaFetch("demandes_labo?select=*&order=created_at.desc"),
       supaFetch("demandes_avis?select=*&order=created_at.desc"),
+      supaFetch("vaccins?select=*&order=created_at.asc").catch(()=>[]),
+      supaFetch("patient_links?select=*").catch(()=>[]),
     ]);
     if(!users||!patients) throw new Error("Données inaccessibles");
 
@@ -789,11 +791,16 @@ async function loadDBFromSupabase(){
     const imgObj={};
     (imagerie||[]).forEach(img=>{const pid=img.patient_id;if(!imgObj[pid])imgObj[pid]=[];imgObj[pid].push({...img,patientId:pid});});
 
+    const vaxObj={};
+    (vaccinsRows||[]).forEach(v=>{const pid=v.patient_id;if(!vaxObj[pid])vaxObj[pid]=[];vaxObj[pid].push({...v,patientId:pid});});
+
     const db = {
       users:mappedUsers, patients:mappedPatients, access:mappedAccess,
       consultations:consObj, labos:labosObj, rdv:rdvArr, rx:rxObj, imagerie:imgObj,
       demandes_labo:(demandesLabo||[]).map(d=>({...d,patientId:d.patient_id})),
       demandes_avis:(demandesAvis||[]).map(d=>({...d,patientId:d.patient_id})),
+      vaccins:vaxObj,
+      patient_links:(patientLinks||[]).map(l=>({...l,patientId:l.patient_id,userId:l.user_id})),
       logs:[]
     };
     try{localStorage.setItem("medirecord_db",JSON.stringify(db));}catch(e){}
@@ -852,7 +859,15 @@ async function syncChanged(changed){
 
   // Mapper les champs selon la table
   let data = rows;
-  if(table==="rdv") data = rows.map(r=>({
+  if(table==="vaccins") data = rows.map(v=>({
+    id:v.id, patient_id:v.patientId||v.patient_id, nom:v.nom, vac_code:v.vac_code||null,
+    date:v.date||null, dose:v.dose||null, lot:v.lot||null, par:v.par||null, remarque:v.remarque||null
+  }));
+  else if(table==="patient_links") data = rows.map(l=>({
+    id:l.id, user_id:l.userId||l.user_id, patient_id:l.patientId||l.patient_id,
+    relation:l.relation||"parent", actif:l.actif!==false
+  }));
+  else if(table==="rdv") data = rows.map(r=>({
     id:r.id, patient_id:r.patientId||r.patient_id,
     day:r.day||null, mo:r.mo||null, h:r.h||null,
     dr:r.dr||null, spec:r.spec||null, lieu:r.lieu||null,
@@ -2467,11 +2482,11 @@ function rDossier(){
   if(!p){G("pg-dossier").innerHTML=`<div style="padding:40px;text-align:center;color:var(--g400)">Sélectionnez un patient</div>`;return;}
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
-  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
-  const _uc=getUnseenCounts(p.id);const tabsHtml=tabs.map(t=>{const n=_uc[{consultations:"el_consult",labo:"el_labo",imagerie:"el_img",prescriptions:"el_rx",rdv:"el_rdv"}[t.id]]||0;return `<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}${n?`<span class="tab-badge">${n}</span>`:""}</div>`;}).join("");
+  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"vaccins",l:"Vaccination",i:"💉",show:true},{id:"carnet",l:"Carnet",i:"📔",show:isMinorPatient(p)},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
+  const _uc=getUnseenCounts(p.id);const _vaxLate=buildVaxScheduleIdx(p).late.length;const tabsHtml=tabs.map(t=>{let n=_uc[{consultations:"el_consult",labo:"el_labo",imagerie:"el_img",prescriptions:"el_rx",rdv:"el_rdv"}[t.id]]||0;if(t.id==="vaccins")n=_vaxLate;return `<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}${n?`<span class="tab-badge">${n}</span>`:""}</div>`;}).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
-    <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${p.age} ans · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
+    <div class="dv-header"><div class="dv-av">${p.initials}</div><div style="flex:1"><div class="dv-name">${p.prenom} ${p.nom}</div><div class="dv-meta">${ageInfoX(p.dob).months!==null?ageInfoX(p.dob).label:(p.age||"?")+" ans"} · ${p.sexe==="M"?"Homme":"Femme"} · Groupe ${p.groupe} · ${p.ville}</div>
         <div style="margin-top:6px">${p.consentement?`<span style="background:rgba(22,163,74,.2);color:#86efac;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">✓ Consentement recueilli le ${p.consentement.date}</span>`:`<span style="background:rgba(229,57,53,.2);color:#fca5a5;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700">⚠ Consentement manquant</span>`}</div><div class="dv-tags">${p.pathologies?.map(x=>`<span class="dv-tag">${x}</span>`).join("")||""}${p.allergies?.map(x=>`<span class="dv-tag dv-tag-red">⚠ ${x}</span>`).join("")||""}${p.dialyse?`<span class="dv-tag" style="background:rgba(11,168,150,.3)">💧 Hémodialyse ${p.seances_semaine}×/sem</span>`:""}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px">Médecin référent</div><div style="font-size:13px;font-weight:700;color:#fff">${titre}${ref?ref.prenom+" "+ref.nom:"—"}</div><div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${ref?.spec||""}</div></div></div>
     <div class="dv-tabs">${tabsHtml}</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0;flex-wrap:wrap">
@@ -2486,7 +2501,297 @@ function rDossier(){
 }
 
 function switchDossierTab(tab){dossierTab=tab;document.querySelectorAll(".dv-tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===tab));renderDossierTab();}
-function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv}[dossierTab]||function(){})();}
+function renderDossierTab(){({overview:dSynthese,consultations:dConsultations,labo:dLabo,imagerie:dImagerie,prescriptions:dRx,rdv:dRdv,vaccins:dVaccins,carnet:dCarnet}[dossierTab]||function(){})();}
+
+// ═══════════ MODULE VACCINATION + CARNET (pro) ═══════════
+function _pFRx(s){ const m=String(s||"").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
+function _fmtFRx(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+function ageInfoX(dob){
+  const d=_pFRx(dob); if(!d) return {years:null,months:null,label:"—"};
+  const now=new Date();
+  let months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+  if(now.getDate()<d.getDate()) months--;
+  const years=Math.floor(months/12);
+  return {years, months, label: months<24 ? months+" mois" : years+" ans"};
+}
+function isMinorPatient(p){ const a=ageInfoX(p&&p.dob); return a.months!==null && a.months<216; }
+
+const VAX_CHILD_X=[
+  {code:"bcg",m:0,nom:"BCG",dose:"Dose unique"},
+  {code:"hb",m:0,nom:"Hépatite B",dose:"Naissance"},
+  {code:"vpo",m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
+  {code:"penta",m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose"},
+  {code:"vpo",m:2,nom:"VPO (Polio orale)",dose:"1re dose"},
+  {code:"pneumo",m:2,nom:"Pneumocoque (PCV)",dose:"1re dose"},
+  {code:"rota",m:2,nom:"Rotavirus",dose:"1re dose"},
+  {code:"penta",m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose"},
+  {code:"vpo",m:3,nom:"VPO (Polio orale)",dose:"2e dose"},
+  {code:"pneumo",m:3,nom:"Pneumocoque (PCV)",dose:"2e dose"},
+  {code:"rota",m:3,nom:"Rotavirus",dose:"2e dose"},
+  {code:"penta",m:4,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose"},
+  {code:"vpo",m:4,nom:"VPO (Polio orale)",dose:"3e dose"},
+  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose"},
+  {code:"pneumo",m:12,nom:"Pneumocoque (PCV)",dose:"Rappel 12 mois"},
+  {code:"rr",m:18,nom:"Rougeole-Rubéole (RR)",dose:"2e dose"},
+  {code:"dtc_r",m:18,nom:"DTC rappel",dose:"Rappel 18 mois"},
+  {code:"vpo",m:18,nom:"VPO (Polio orale)",dose:"Rappel 18 mois"},
+  {code:"dtc_r",m:60,nom:"DTC rappel",dose:"Rappel 5 ans"},
+  {code:"vpo",m:60,nom:"VPO (Polio orale)",dose:"Rappel 5 ans"}
+];
+const VAX_CATALOG=[
+  {code:"bcg",nom:"BCG"},{code:"hb",nom:"Hépatite B"},{code:"vpo",nom:"VPO (Polio orale)"},
+  {code:"penta",nom:"Pentavalent (DTC-Hib-HB)"},{code:"pneumo",nom:"Pneumocoque (PCV)"},
+  {code:"rota",nom:"Rotavirus"},{code:"rr",nom:"Rougeole-Rubéole (RR)"},{code:"dtc_r",nom:"DTC rappel"},
+  {code:"tetanos",nom:"Tétanos-diphtérie (dTP)"},{code:"grippe",nom:"Grippe saisonnière"},
+  {code:"covid",nom:"COVID-19"},{code:"hepA",nom:"Hépatite A"},{code:"mening",nom:"Méningocoque ACWY"},
+  {code:"hpv",nom:"Papillomavirus (HPV)"},{code:"varicelle",nom:"Varicelle"},{code:"autre",nom:"Autre vaccin"}
+];
+
+function buildVaxScheduleIdx(p){
+  const vax=((DB.vaccins&&DB.vaccins[p.id])||[]).slice()
+    .sort((a,b)=>{const da=_pFRx(a.date),db_=_pFRx(b.date);return (da&&db_)?da-db_:0;});
+  const res={late:[],upcoming:[],done:vax};
+  const ai=ageInfoX(p.dob), birth=_pFRx(p.dob), now=new Date();
+  if(!birth) return res;
+  const countDone=code=>vax.filter(v=>v.vac_code===code).length;
+  if(ai.months<216){
+    const seen={};
+    VAX_CHILD_X.forEach(e=>{
+      seen[e.code]=(seen[e.code]||0)+1;
+      const due=new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
+      if(countDone(e.code)>=seen[e.code]) return;
+      const item={nom:e.nom,dose:e.dose,due,code:e.code};
+      if(due<=now) res.late.push(item);
+      else if(e.m<=ai.months+12) res.upcoming.push(item);
+    });
+  } else {
+    const lastTet=vax.filter(v=>v.vac_code==="dtc_r"||v.vac_code==="tetanos").pop();
+    if(lastTet){
+      const d=_pFRx(lastTet.date);
+      if(d){ const due=new Date(d.getFullYear()+10,d.getMonth(),d.getDate());
+        (due<=now?res.late:res.upcoming).push({nom:"Tétanos-diphtérie (dTP)",dose:"Rappel (tous les 10 ans)",due,code:"tetanos"}); }
+    } else {
+      res.late.push({nom:"Tétanos-diphtérie (dTP)",dose:"Rappel — date du dernier inconnue",due:null,code:"tetanos"});
+    }
+    const chronic=((p.pathologies||[]).concat(p.antecedents||[]).join(" ")).match(/diab|irc|r[ée]nal|dialys|asthme|bpco|cardi|immuno/i);
+    if(chronic||ai.years>=65){
+      const flu=vax.filter(v=>v.vac_code==="grippe").pop();
+      const fluD=flu?_pFRx(flu.date):null;
+      const season=new Date(now.getFullYear(),9,1);
+      if(now>=season && (!fluD||fluD<season))
+        res.late.push({nom:"Grippe saisonnière",dose:"Dose annuelle (pathologie chronique)",due:season,code:"grippe"});
+      else if(!fluD||fluD<season)
+        res.upcoming.push({nom:"Grippe saisonnière",dose:"Dose annuelle (recommandée)",due:season,code:"grippe"});
+    }
+    if(!countDone("hb") && ((p.pathologies||[]).join(" ")).match(/irc|dialys/i))
+      res.upcoming.push({nom:"Hépatite B",dose:"Schéma complet (recommandé : dialyse)",due:null,code:"hb"});
+  }
+  return res;
+}
+
+function dVaccins(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const s=buildVaxScheduleIdx(p);
+  const canWrite=["admin","medecin","specialiste"].includes(currentUser.role);
+  const row=(it,late)=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px dashed var(--g200)">
+    <span style="font-size:18px">💉</span><div style="flex:1;min-width:0">
+    <div style="font-size:13.5px;font-weight:700">${it.nom}</div>
+    <div style="font-size:11.5px;color:var(--g400)">${it.dose}${it.due?" · prévu le "+_fmtFRx(it.due):""}</div></div>
+    ${late?'<span style="font-size:9.5px;font-weight:800;background:#FDECEC;color:#B4001A;padding:3px 9px;border-radius:99px">EN RETARD</span>':''}</div>`;
+  const doneRow=v=>{
+    const drU=DB.users.find(u=>u.id===v.par);
+    const drN=drU?((drU.titre?drU.titre+" ":"")+drU.prenom+" "+drU.nom):"";
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px dashed var(--g200)">
+      <span style="font-size:18px">✅</span><div style="flex:1;min-width:0">
+      <div style="font-size:13.5px;font-weight:700">${v.nom}</div>
+      <div style="font-size:11.5px;color:var(--g400)">${v.dose||""} · ${v.date||""}${v.lot?" · Lot "+v.lot:""}${drN?" · "+drN:""}</div></div>
+      ${canWrite?`<button class="btn bs bsm" onclick="delVaccin('${v.id}')" title="Supprimer">✕</button>`:""}</div>`;
+  };
+  G("dossier-content").innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:800">💉 Vaccination — échéancier & historique</div>
+      <div style="display:flex;gap:8px">
+        ${canWrite?`<button class="btn bp bsm" onclick="showAddVaccin()">+ Vaccin administré</button>`:""}
+        <button class="btn bs bsm" onclick="printCarnetVaxIdx('${p.id}')">🖨️ Carnet de vaccination</button>
+      </div>
+    </div>
+    ${s.late.length?`<div class="card" style="margin-bottom:14px;border:1.5px solid #F5C6C6"><div class="ctit" style="color:#B4001A"><span class="ci">🔴</span> Rappels en retard (${s.late.length})</div>${s.late.map(it=>row(it,true)).join("")}</div>`:""}
+    ${s.upcoming.length?`<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">📅</span> À venir</div>${s.upcoming.map(it=>row(it,false)).join("")}</div>`:""}
+    <div class="card"><div class="ctit"><span class="ci">✅</span> Vaccins reçus (${s.done.length})</div>
+      ${s.done.length?s.done.slice().reverse().map(doneRow).join(""):'<div style="font-size:12.5px;color:var(--g400);padding:6px 0">Aucun vaccin enregistré.</div>'}
+    </div>
+    <div style="font-size:10.5px;color:var(--g400);text-align:center;margin-top:12px">Échéancier indicatif basé sur le calendrier vaccinal marocain — référentiel à valider selon les recommandations officielles en vigueur.</div>`;
+}
+
+function showAddVaccin(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const opts=VAX_CATALOG.map(v=>`<option value="${v.code}">${v.nom}</option>`).join("");
+  modal(`<div class="mb"><div class="mh"><span class="mt2">💉 Vaccin administré — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div class="fg"><label>Vaccin *</label><select id="vx-code">${opts}</select></div>
+    <div class="fg"><label>Précision (si "Autre")</label><input id="vx-nom" placeholder="Nom exact du vaccin"/></div>
+    <div class="fg"><label>Date d'administration *</label>${date3HTML('vx-date',new Date().toISOString().slice(0,10),{minY:1950,todayBtn:true})}</div>
+    <div class="fr"><div class="fg"><label>Dose</label><input id="vx-dose" placeholder="Ex : 1re dose, Rappel"/></div>
+    <div class="fg"><label>N° de lot</label><input id="vx-lot" placeholder="Ex : PT-5511"/></div></div>
+    <div class="fg"><label>Remarque</label><input id="vx-rem" placeholder="Optionnel"/></div>
+    </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" onclick="saveVaccin()">Enregistrer</button></div></div>`);
+}
+
+function saveVaccin(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const code=G("vx-code").value;
+  const cat=VAX_CATALOG.find(v=>v.code===code);
+  let nom=cat?cat.nom:code;
+  if(code==="autre"){ const custom=_xssClean(G("vx-nom").value.trim()); if(!custom){toast("Précisez le nom du vaccin","error");return;} nom=custom; }
+  const iso=G("vx-date").value;
+  if(!iso){toast("Date invalide","error");return;}
+  const [y,m,d]=iso.split("-");
+  const v={
+    id:"v"+Date.now(), patient_id:p.id, patientId:p.id, nom,
+    vac_code:code, date:d+"/"+m+"/"+y,
+    dose:_xssClean(G("vx-dose").value.trim())||null,
+    lot:_xssClean(G("vx-lot").value.trim())||null,
+    par:currentUser.id,
+    remarque:_xssClean(G("vx-rem").value.trim())||null
+  };
+  if(!DB.vaccins) DB.vaccins={};
+  if(!DB.vaccins[p.id]) DB.vaccins[p.id]=[];
+  DB.vaccins[p.id].push(v);
+  saveDB(DB,{table:"vaccins",rows:[v]});
+  document.querySelectorAll(".mov").forEach(m=>m.remove());
+  toast("Vaccin enregistré ✓"); rDossier(); switchDossierTab("vaccins");
+}
+
+function delVaccin(vid){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  if(!confirm("Supprimer cet enregistrement de vaccin ?")) return;
+  DB.vaccins[p.id]=(DB.vaccins[p.id]||[]).filter(v=>v.id!==vid);
+  try{localStorage.setItem("medirecord_db",JSON.stringify(DB));}catch(e){}
+  supaFetch("vaccins?id="+encodeURIComponent("eq."+vid),{method:"DELETE",prefer:"return=minimal"});
+  toast("Vaccin supprimé"); rDossier(); switchDossierTab("vaccins");
+}
+
+function printCarnetVaxIdx(pid){
+  const p=DB.patients.find(x=>x.id===pid);
+  const s=buildVaxScheduleIdx(p);
+  const ai=ageInfoX(p.dob);
+  const rowsDone=s.done.map(v=>{
+    const drU=DB.users.find(u=>u.id===v.par);
+    const drN=drU?((drU.titre?drU.titre+" ":"")+drU.prenom+" "+drU.nom):"—";
+    return `<tr><td>${v.nom}</td><td>${v.dose||""}</td><td>${v.date||""}</td><td>${v.lot||"—"}</td><td>${drN}</td></tr>`;
+  }).join("");
+  const rowsLate=s.late.map(it=>`<tr class="late"><td>${it.nom}</td><td>${it.dose}</td><td>${it.due?_fmtFRx(it.due):"—"}</td><td colspan="2">EN RETARD</td></tr>`).join("");
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carnet de vaccination — ${p.prenom} ${p.nom}</title><style>
+    body{font-family:Helvetica,Arial,sans-serif;margin:30px;color:#1C1917}
+    h1{font-size:20px;color:#0F766E;margin-bottom:2px} .sub{font-size:11px;color:#78716C;margin-bottom:16px}
+    .id{background:#F0FDFA;border:1px solid #C6E9E4;border-radius:8px;padding:12px 14px;font-size:12.5px;margin-bottom:18px}
+    h2{font-size:14px;margin:18px 0 6px} table{width:100%;border-collapse:collapse;font-size:11.5px}
+    th{background:#0F766E;color:#fff;text-align:left;padding:7px 9px} td{padding:7px 9px;border-bottom:1px solid #E7E5E4}
+    tr.late td{color:#B4001A;font-weight:700}
+    .sig{margin-top:30px;display:flex;justify-content:space-between;font-size:12px}
+    .foot{margin-top:26px;font-size:9px;color:#78716C;text-align:center}
+    @media print{.noprint{display:none}}</style></head><body>
+    <h1>💉 Carnet de vaccination</h1><div class="sub">MediReport Pro · édité le ${_fmtFRx(new Date())}</div>
+    <div class="id"><b>${p.prenom} ${p.nom}</b> · Né(e) le ${p.dob||"—"} (${ai.label})${p.groupe?" · Groupe "+p.groupe:""}${p.cin?" · CIN "+p.cin:""}</div>
+    <h2>Vaccins reçus</h2><table><tr><th>Vaccin</th><th>Dose</th><th>Date</th><th>Lot</th><th>Administré par</th></tr>${rowsDone||'<tr><td colspan="5">Aucun vaccin enregistré</td></tr>'}</table>
+    ${rowsLate?`<h2>Rappels en retard</h2><table><tr><th>Vaccin</th><th>Dose</th><th>Prévu le</th><th colspan="2">Statut</th></tr>${rowsLate}</table>`:""}
+    <div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>
+    <div class="foot">MediReport Pro · 🇲🇦 Conçu au Maroc · Document confidentiel · Échéancier indicatif — calendrier vaccinal de référence</div>
+    <button class="noprint" onclick="window.print()" style="margin-top:20px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button>
+    </body></html>`;
+  const w=window.open("","_blank");
+  if(w){w.document.write(html);w.document.close();}
+}
+
+function dCarnet(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const ai=ageInfoX(p.dob);
+  const cons=sortByDate(DB.consultations[p.id]||[], 'date', true);
+  const meas=[];
+  cons.forEach(c=>{
+    const ct=c.constantes||{};
+    const w=parseFloat(String(ct["Poids"]||"").replace(",", "."));
+    const t=parseFloat(String(ct["Taille"]||"").replace(",", "."));
+    const pc=parseFloat(String(ct["PC"]||"").replace(",", "."));
+    if(!isNaN(w)||!isNaN(t)||!isNaN(pc)) meas.push({date:c.date,w:isNaN(w)?null:w,t:isNaN(t)?null:t,pc:isNaN(pc)?null:pc});
+  });
+  const chart=(vals,color,unit,title)=>{
+    const pts=vals.filter(v=>v.v!==null);
+    if(!pts.length) return "";
+    const last=pts[pts.length-1];
+    let line="";
+    if(pts.length>=2){
+      const vmin=Math.min(...pts.map(x=>x.v)),vmax=Math.max(...pts.map(x=>x.v));
+      const rng=(vmax-vmin)||1,sw=300,sh=64;
+      line=`<svg viewBox="0 0 ${sw} ${sh}" style="width:100%;height:64px"><polyline points="${pts.map((pp,i)=>`${(i*sw/(pts.length-1)).toFixed(1)},${(sh-6-(pp.v-vmin)/rng*(sh-12)).toFixed(1)}`).join(" ")}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round"/>${pts.map((pp,i)=>`<circle cx="${(i*sw/(pts.length-1)).toFixed(1)}" cy="${(sh-6-(pp.v-vmin)/rng*(sh-12)).toFixed(1)}" r="3" fill="${color}"/>`).join("")}</svg>`;
+    }
+    const tbl=`<div style="font-size:10.5px;color:var(--g400);margin-top:4px">${pts.map(pp=>`${pp.d.slice(0,5)} : <b style="color:var(--g700)">${pp.v}</b>`).join(" · ")}</div>`;
+    return `<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+      <b style="font-size:13.5px">${title}</b><span style="font-family:monospace;font-weight:800;font-size:16px;color:${color}">${last.v} ${unit}</span></div>${line}${tbl}</div>`;
+  };
+  const devs=cons.filter(c=>c.constantes&&c.constantes["Développement"]);
+  const lastDev=devs.length?devs[devs.length-1]:null;
+  G("dossier-content").innerHTML=`
+    <div style="font-size:15px;font-weight:800;margin-bottom:14px">📔 Carnet de santé — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div>
+    ${chart(meas.map(m=>({v:m.w,d:m.date})),"#0F766E","kg","⚖️ Poids")}
+    ${chart(meas.map(m=>({v:m.t,d:m.date})),"#1A6EFF","cm","📏 Taille")}
+    ${chart(meas.map(m=>({v:m.pc,d:m.date})),"#7C3AED","cm","⭕ Périmètre crânien")}
+    ${!meas.length?'<div class="card" style="text-align:center;color:var(--g400);font-size:13px;margin-bottom:14px">Les mesures (poids, taille, PC) saisies dans les consultations pédiatriques apparaîtront ici.</div>':""}
+    ${lastDev?`<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">🚼</span> Développement psychomoteur</div><div style="font-size:13.5px">${lastDev.constantes["Développement"]}</div><div style="font-size:11px;color:var(--g400);margin-top:3px">Évalué le ${lastDev.date}</div></div>`:""}
+    <div class="card"><div class="ctit"><span class="ci">👨‍👩‍👧</span> Compte famille</div>${familyLinksHtml(p)}</div>
+    <div style="font-size:10.5px;color:var(--g400);text-align:center;margin-top:12px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>`;
+}
+
+function familyLinksHtml(p){
+  const links=(DB.patient_links||[]).filter(l=>l.patientId===p.id);
+  const canWrite=["admin","medecin","specialiste"].includes(currentUser.role);
+  let h="";
+  if(links.length){
+    h+=links.map(l=>{
+      const u=DB.users.find(x=>x.id===l.userId);
+      const nm=u?(u.prenom+" "+u.nom+(u.login?" ("+u.login+")":"")):l.userId;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--g200)">
+        <span style="font-size:16px">${l.relation==="mere"?"👩":"👨"}</span>
+        <div style="flex:1;font-size:13px"><b>${nm}</b> <span style="color:var(--g400);font-size:11.5px">· ${l.relation==="mere"?"Mère":l.relation==="pere"?"Père":"Tuteur"} ${l.actif?"":"· <span style='color:#B4001A'>désactivé</span>"}</span></div>
+        ${canWrite?`<button class="btn bs bsm" onclick="toggleLink('${l.id}',${!l.actif})">${l.actif?"Désactiver":"Réactiver"}</button>`:""}</div>`;
+    }).join("");
+  } else {
+    h+=`<div style="font-size:12.5px;color:var(--g400);padding:4px 0">Aucun compte parent lié.</div>`;
+  }
+  if(canWrite) h+=`<button class="btn bs bsm" style="margin-top:10px" onclick="showLinkParent()">+ Lier un compte parent</button>`;
+  return h;
+}
+
+function showLinkParent(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const parents=DB.users.filter(u=>u.role==="patient"&&u.patientId!==p.id);
+  if(!parents.length){toast("Aucun compte patient à lier","error");return;}
+  const opts=parents.map(u=>`<option value="${u.id}">${u.prenom} ${u.nom}${u.login?" ("+u.login+")":""}</option>`).join("");
+  modal(`<div class="mb"><div class="mh"><span class="mt2">👨‍👩‍👧 Lier un compte parent — ${p.prenom} ${p.nom}</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
+    <div class="fg"><label>Compte parent (accès mobile existant) *</label><select id="lk-user">${opts}</select></div>
+    <div class="fg"><label>Relation</label><select id="lk-rel"><option value="pere">Père</option><option value="mere">Mère</option><option value="tuteur">Tuteur</option></select></div>
+    <div style="font-size:11.5px;color:var(--g400);margin:8px 0">Le parent verra ce dossier dans son application, aux côtés du sien. Les deux parents peuvent être liés au même enfant.</div>
+    </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" onclick="saveLinkParent()">Lier</button></div></div>`);
+}
+
+function saveLinkParent(){
+  const p=DB.patients.find(x=>x.id===currentPatientId);
+  const uid=G("lk-user").value, rel=G("lk-rel").value;
+  if((DB.patient_links||[]).some(l=>l.userId===uid&&l.patientId===p.id)){toast("Ce lien existe déjà","error");return;}
+  const link={id:"pl"+Date.now(),user_id:uid,userId:uid,patient_id:p.id,patientId:p.id,relation:rel,actif:true};
+  if(!DB.patient_links) DB.patient_links=[];
+  DB.patient_links.push(link);
+  saveDB(DB,{table:"patient_links",rows:[link]});
+  document.querySelectorAll(".mov").forEach(m=>m.remove());
+  toast("Compte parent lié ✓ (effectif à sa prochaine connexion)"); switchDossierTab("carnet");
+}
+
+function toggleLink(lid,newState){
+  const l=(DB.patient_links||[]).find(x=>x.id===lid); if(!l) return;
+  l.actif=newState;
+  try{localStorage.setItem("medirecord_db",JSON.stringify(DB));}catch(e){}
+  supaFetch("patient_links?id="+encodeURIComponent("eq."+lid),{method:"PATCH",body:JSON.stringify({actif:newState}),prefer:"return=minimal"});
+  toast(newState?"Lien réactivé":"Lien désactivé"); switchDossierTab("carnet");
+}
 
 function dSynthese(){
   const p = DB.patients.find(x=>x.id===currentPatientId);
@@ -4116,6 +4421,7 @@ function showAddConsult(pid){
     } else if(s.includes("pédiatr")||s.includes("pediatr")){
       if(v("fc-pds"))      c["Poids"]=v("fc-pds")+" kg";
       if(v("fc-taille"))   c["Taille"]=v("fc-taille")+" cm";
+      if(v("fc-pc"))       c["PC"]=v("fc-pc")+" cm";
       if(v("fc-tmp"))      c["Température"]=v("fc-tmp")+"°C";
       if(v("fc-fc"))       c["FC"]=v("fc-fc")+" bpm";
       if(v("fc-spo"))      c["SpO2"]=v("fc-spo")+"%";

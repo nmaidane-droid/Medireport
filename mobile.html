@@ -49,11 +49,11 @@ label{display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:
 .p-consent{font-size:11px;font-weight:700;margin-top:5px;background:rgba(255,255,255,.2);display:inline-block;padding:2px 10px;border-radius:99px;color:#fff}
 
 /* TABS */
-.tabs{display:flex;background:#fff;border-bottom:1px solid var(--g200);padding:4px 4px 6px;flex-shrink:0;position:sticky;top:0;z-index:50;box-shadow:0 4px 16px rgba(28,25,23,.05)}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:#fff;border-bottom:1px solid var(--g200);padding:4px 4px 6px;flex-shrink:0;position:sticky;top:0;z-index:50;box-shadow:0 4px 16px rgba(28,25,23,.05)}
 .tabs::-webkit-scrollbar{display:none}
 .tab{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px 6px;border-radius:12px;cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1);user-select:none;min-width:0}
 .tab-i{font-size:20px;line-height:1;transition:transform .18s}
-.tab-l{font-size:10px;font-weight:700;color:var(--g500);letter-spacing:.1px;white-space:nowrap}
+.tab-l{font-size:9.5px;font-weight:700;color:var(--g500);letter-spacing:.05px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .tab.on{background:var(--blue-l)}
 .tab.on .tab-l{color:var(--blue)}
 .tab.on .tab-i{transform:scale(1.12)}
@@ -161,7 +161,7 @@ button{font-family:inherit}
       <div class="hdr-logo" style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:white;padding:3px;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><rect width="100" height="100" rx="22" fill="white"/><polyline points="5,50 17,50 24,28 34,72 41,38 48,50 52,50 59,28 69,72 76,40 83,50 95,50" fill="none" stroke="#E8001C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>MediReport Mobile</div>
       <button class="h-out" onclick="logout()">Déconnexion</button>
     </div>
-    <div class="p-card">
+    <div class="p-card" id="pcard">
       <div class="p-av" id="pav">?</div>
       <div>
         <div class="p-name" id="pnam">—</div>
@@ -172,11 +172,13 @@ button{font-family:inherit}
   </div>
   <div class="tabs" id="tabs">
     <div class="tab on" data-t="syn" onclick="switchTab('syn',this)"><span class="tab-i">📋</span><span class="tab-l">Synthèse</span></div>
-    <div class="tab" data-t="con" onclick="switchTab('con',this)"><span class="tab-i">🩺</span><span class="tab-l">Consult.</span></div>
-    <div class="tab" data-t="lab" onclick="switchTab('lab',this)"><span class="tab-i">🧪</span><span class="tab-l">Labo</span></div>
-    <div class="tab" data-t="med" onclick="switchTab('med',this)"><span class="tab-i">💊</span><span class="tab-l">Médic.</span></div>
-    <div class="tab" data-t="rdv" onclick="switchTab('rdv',this)"><span class="tab-i">📅</span><span class="tab-l">RDV</span></div>
+    <div class="tab" data-t="con" onclick="switchTab('con',this)"><span class="tab-i">🩺</span><span class="tab-l">Consultations</span></div>
+    <div class="tab" data-t="lab" onclick="switchTab('lab',this)"><span class="tab-i">🧪</span><span class="tab-l">Laboratoire</span></div>
+    <div class="tab" data-t="med" onclick="switchTab('med',this)"><span class="tab-i">💊</span><span class="tab-l">Médicaments</span></div>
+    <div class="tab" data-t="rdv" onclick="switchTab('rdv',this)"><span class="tab-i">📅</span><span class="tab-l">Rendez-vous</span></div>
     <div class="tab" data-t="img" onclick="switchTab('img',this)"><span class="tab-i">🔬</span><span class="tab-l">Imagerie</span></div>
+    <div class="tab" data-t="vax" onclick="switchTab('vax',this)"><span class="tab-i">💉</span><span class="tab-l">Vaccination</span></div>
+    <div class="tab" data-t="car" id="tab-car" onclick="switchTab('car',this)" style="visibility:hidden"><span class="tab-i">📔</span><span class="tab-l">Carnet</span></div>
   </div>
   <div class="ct" id="ct"></div>
 </div>
@@ -289,7 +291,7 @@ function markTabSeen(tab){
 
 function reloadPatientData(){
   if (!USR || !PAT || !TOKEN) return;
-  var pid = PAT.id, done = 0, need = 5;
+  var pid = PAT.id, done = 0, need = 6;
   function fin(){ done++; if (done >= need){ updateMobileBadges(); showTab(curTab); } }
   supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
     if(rows){ DB.rx[pid]=rows.map(function(rx){ return Object.assign({},rx,{patientId:rx.patient_id,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance,a_vie:rx.a_vie||false,date_fin:rx.date_fin||null}); }); } fin();
@@ -305,6 +307,9 @@ function reloadPatientData(){
   });
   supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
     if(rows){ DB.consultations[pid]=rows; } fin();
+  });
+  supaGet("vaccins?patient_id=eq."+pid+"&select=*&order=created_at.asc", function(rows){
+    if(rows){ DB.vaccins[pid]=rows; updateVaxBadge(); } fin();
   });
 }
 
@@ -341,89 +346,173 @@ function login() {
 
     TOKEN = res.data.token;
     USR = user; pin = "";
-    var pid = user.patientId;
 
-    // ── Écran de chargement ──
-    document.getElementById("ls").style.display = "none";
-    var loadingDiv = document.createElement("div");
-    loadingDiv.id = "loading-screen";
-    loadingDiv.style.cssText = "position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px";
-    loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="98" height="98" rx="20" fill="white" stroke="#1a1a2e" stroke-width="1.5"/><polyline points="3,50 17,50 24,26 34,74 41,36 48,50 52,50 59,26 69,74 76,38 83,50 97,50" fill="none" stroke="#E8001C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-      + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
-      + '<div style="font-size:14px;color:#64748B">Chargement de votre dossier...</div>'
-      + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#0F766E;border-radius:99px;transition:width .3s"></div></div>';
-    document.body.appendChild(loadingDiv);
-
-    // ── Charger UNIQUEMENT son dossier (le serveur force le filtre de toute façon) ──
-    DB = {users:[user], patients:[], consultations:{}, labos:{}, rx:{}, rdv:[], imagerie:{}, access:[]};
-    var loaded = 0, total = 8;
-
-    function updateBar(){ loaded++; var pct=(loaded/total*100); var lb=document.getElementById("load-bar"); if(lb) lb.style.width=pct+"%"; if(loaded>=total) launchApp(); }
-
-    function launchApp(){
-      if (!PAT) {
-        var ls0 = document.getElementById("loading-screen");
-        if(ls0) ls0.remove();
-        document.getElementById("ls").style.display = "flex";
-        err.style.color = "#DC2626";
-        err.textContent = "Dossier introuvable — contactez votre médecin";
-        return;
-      }
-      var ls1 = document.getElementById("loading-screen");
-      if(ls1) ls1.remove();
-      document.getElementById("app").style.display = "flex";
-      document.getElementById("app").style.flexDirection = "column";
-      buildHeader();
-      showTab("syn");
-      curTab = "syn";
-      resetTimer();
-      ensureBaselineM();
-      updateMobileBadges();
+    // ── Compte famille : si des dossiers sont liés, proposer le choix ──
+    if (user.linkedPatients && user.linkedPatients.length) {
+      showFamilyChooser(user);
+    } else {
+      loadDossier(user.patientId);
     }
-
-    supaGet("patients?id=eq."+pid+"&select=*", function(rows){
-      if(rows&&rows[0]){ PAT=Object.assign({},rows[0],{userId:rows[0].user_id}); DB.patients=[PAT]; }
-      updateBar();
-    });
-    supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-      if(rows){ DB.rx[pid]=rows.map(function(rx){ return Object.assign({},rx,{patientId:rx.patient_id,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance,a_vie:rx.a_vie||false,date_fin:rx.date_fin||null}); }); }
-      updateBar();
-    });
-    supaGet("labos?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-      if(rows){ DB.labos[pid]=rows.map(function(l){ return Object.assign({},l,{patientId:l.patient_id,res:l.resultats||[]}); }); }
-      updateBar();
-    });
-    supaGet("rdv?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-      if(rows){ DB.rdv=rows.map(function(r){return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color});}); }
-      updateBar();
-    });
-    supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-      if(rows){ DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{patientId:i.patient_id,cr:i.conclusion,res:i.resultat,rc:i.resultat==="Normal"?"g":"a"}); }); }
-      updateBar();
-    });
-    supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
-      if(rows){ DB.consultations[pid]=rows; }
-      updateBar();
-    });
-    supaGet("seen_items?select=item_id,item_type,created_at", function(rows){
-      _seen = {}; _seenBaseline = null;
-      if (rows){ rows.forEach(function(r){
-        if (r.item_type === "baseline"){ _seenBaseline = r.created_at; return; }
-        if (!_seen[r.item_type]) _seen[r.item_type] = [];
-        _seen[r.item_type].push(r.item_id);
-      }); }
-      updateBar();
-    });
-    supaGet("users?select=*", function(rows){
-      if(rows && rows.length){
-        var me = DB.users[0];
-        DB.users = [me].concat(rows.filter(function(u){ return u.id !== me.id; }));
-      }
-      updateBar();
-    });
   }).catch(function(){
     err.style.color = "#DC2626";
     err.textContent = "Service indisponible — vérifiez votre connexion";
+  });
+}
+
+// ═══════════ COMPTE FAMILLE ═══════════
+function showFamilyChooser(user){
+  document.getElementById("ls").style.display = "none";
+  var old = document.getElementById("family-screen"); if(old) old.remove();
+  var fs = document.createElement("div");
+  fs.id = "family-screen";
+  fs.style.cssText = "position:fixed;inset:0;background:#F7F6F3;z-index:9998;display:flex;flex-direction:column;overflow-y:auto";
+  fs.innerHTML = '<div style="background:linear-gradient(150deg,#0F766E,#115E59);color:#fff;padding:20px 16px 24px">'+
+    '<div style="display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px;margin-bottom:14px">'+
+    '<svg width="30" height="30" viewBox="0 0 100 100"><rect x="1" y="1" width="98" height="98" rx="20" fill="white"/><polyline points="3,50 17,50 24,26 34,74 41,36 48,50 52,50 59,26 69,74 76,38 83,50 97,50" fill="none" stroke="#E8001C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>MediReport Mobile</div>'+
+    '<div style="font-size:13px;opacity:.85">Bonjour,</div>'+
+    '<div style="font-size:21px;font-weight:800">'+(user.prenom||"")+' '+(user.nom||"")+' 👋</div></div>'+
+    '<div id="family-list" style="padding:18px 16px"><div style="font-size:14px;font-weight:800;margin-bottom:12px">Quel dossier souhaitez-vous consulter ?</div>'+
+    '<div style="text-align:center;color:#78716C;font-size:12px;padding:20px">Chargement…</div></div>';
+  document.body.appendChild(fs);
+
+  // Charger toutes les fiches autorisées (le serveur limite à soi + enfants liés)
+  supaGet("patients?select=*", function(rows){
+    var list = document.getElementById("family-list");
+    if(!list) return;
+    if(!rows || !rows.length){
+      list.innerHTML = '<div style="text-align:center;color:#DC2626;font-size:13px;padding:20px">Aucun dossier accessible — contactez votre médecin.</div>';
+      return;
+    }
+    var mine = rows.find(function(r){ return r.id === user.patientId; });
+    var kids = rows.filter(function(r){ return r.id !== user.patientId; });
+    var h = '<div style="font-size:14px;font-weight:800;margin-bottom:12px">Quel dossier souhaitez-vous consulter ?</div>';
+    function card(p, isMe){
+      var ai = ageInfo(p.dob);
+      var vaxNote = "";
+      var majNote = "";
+      if(!isMe && ai.months !== null){
+        if(ai.months >= 204 && ai.months < 216){ // 17 ans+
+          var b=_pFRv(p.dob); var maj=new Date(b.getFullYear()+18,b.getMonth(),b.getDate());
+          majNote = '<div style="font-size:10px;font-weight:800;background:#FEF3C7;color:#92400E;padding:3px 9px;border-radius:99px;display:inline-block;margin-top:5px">🎂 18 ans le '+_fmtFR(maj)+' — préparer son accès personnel</div>';
+        } else {
+          majNote = '<div style="font-size:10px;font-weight:800;background:#EFF6FF;color:#1D4ED8;padding:3px 9px;border-radius:99px;display:inline-block;margin-top:5px">👶 Mon enfant</div>';
+        }
+      }
+      if(isMe) majNote = '<div style="font-size:10px;font-weight:800;background:#0F766E;color:#fff;padding:3px 9px;border-radius:99px;display:inline-block;margin-top:5px">Mon dossier</div>';
+      return '<div onclick="selectDossier(\''+p.id+'\')" style="background:'+(isMe?'#F0FDFA':'#fff')+';border:1.5px solid '+(isMe?'#0F766E':'#E7E5E4')+';border-radius:16px;padding:14px;display:flex;align-items:center;gap:13px;margin-bottom:11px;cursor:pointer">'+
+        '<div style="width:46px;height:46px;border-radius:50%;background:'+(p.color||'#1A6EFF')+';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex-shrink:0;box-shadow:0 0 0 2.5px #fff">'+(p.initials||(p.prenom||"?").charAt(0))+'</div>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800">'+p.prenom+' '+p.nom+'</div>'+
+        '<div style="font-size:11.5px;color:#78716C">'+ai.label+(p.groupe?' · Groupe '+p.groupe:'')+'</div>'+majNote+'</div>'+
+        '<div style="color:#A8A29E;font-size:20px;font-weight:700">›</div></div>';
+    }
+    if(mine) h += card(mine, true);
+    kids.forEach(function(k){ h += card(k, false); });
+    h += '<div style="text-align:center;font-size:10.5px;color:#A8A29E;margin-top:14px">🔒 Accès sécurisé CNDP&nbsp;&nbsp;·&nbsp;&nbsp;🇲🇦 Conçu au Maroc</div>';
+    list.innerHTML = h;
+  });
+}
+
+function selectDossier(pid){
+  var fs = document.getElementById("family-screen"); if(fs) fs.remove();
+  loadDossier(pid);
+}
+
+function backToFamily(){
+  var app = document.getElementById("app"); if(app) app.style.display = "none";
+  showFamilyChooser(USR);
+}
+
+// ═══════════ CHARGEMENT D'UN DOSSIER ═══════════
+function loadDossier(pid){
+  var user = USR;
+  // ── Écran de chargement ──
+  var prevLoad = document.getElementById("loading-screen"); if(prevLoad) prevLoad.remove();
+  var loadingDiv = document.createElement("div");
+  loadingDiv.id = "loading-screen";
+  loadingDiv.style.cssText = "position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px";
+  loadingDiv.innerHTML = '<svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="98" height="98" rx="20" fill="white" stroke="#1a1a2e" stroke-width="1.5"/><polyline points="3,50 17,50 24,26 34,74 41,36 48,50 52,50 59,26 69,74 76,38 83,50 97,50" fill="none" stroke="#E8001C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '<div style="font-size:18px;font-weight:800;color:#0F172A">MediReport Mobile</div>'
+    + '<div style="font-size:14px;color:#64748B">Chargement du dossier...</div>'
+    + '<div style="width:200px;height:4px;background:#F1F5F9;border-radius:99px;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:#0F766E;border-radius:99px;transition:width .3s"></div></div>';
+  document.body.appendChild(loadingDiv);
+
+  DB = {users:[user], patients:[], consultations:{}, labos:{}, rx:{}, rdv:[], imagerie:{}, vaccins:{}, access:[]};
+  PAT = null;
+  var loaded = 0, total = 9;
+
+  function updateBar(){ loaded++; var pct=(loaded/total*100); var lb=document.getElementById("load-bar"); if(lb) lb.style.width=pct+"%"; if(loaded>=total) launchApp(); }
+
+  function launchApp(){
+    if (!PAT) {
+      var ls0 = document.getElementById("loading-screen");
+      if(ls0) ls0.remove();
+      document.getElementById("ls").style.display = "flex";
+      var e2 = document.getElementById("perr");
+      if(e2){ e2.style.color = "#DC2626"; e2.textContent = "Dossier introuvable — contactez votre médecin"; }
+      return;
+    }
+    var ls1 = document.getElementById("loading-screen");
+    if(ls1) ls1.remove();
+    document.getElementById("app").style.display = "flex";
+    document.getElementById("app").style.flexDirection = "column";
+    buildHeader();
+    // Onglet Carnet : mineurs uniquement
+    var tc = document.getElementById("tab-car");
+    if(tc) tc.style.visibility = isMinorP(PAT) ? "visible" : "hidden";
+    showTab("syn");
+    curTab = "syn";
+    var synT=document.querySelector('.tab[data-t="syn"]');
+    document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("on");});
+    if(synT) synT.classList.add("on");
+    resetTimer();
+    ensureBaselineM();
+    updateMobileBadges();
+    updateVaxBadge();
+  }
+
+  supaGet("patients?id=eq."+pid+"&select=*", function(rows){
+    if(rows&&rows[0]){ PAT=Object.assign({},rows[0],{userId:rows[0].user_id}); DB.patients=[PAT]; }
+    updateBar();
+  });
+  supaGet("prescriptions?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.rx[pid]=rows.map(function(rx){ return Object.assign({},rx,{patientId:rx.patient_id,s:rx.statut,ren:rx.renouvellement,ord:rx.ordonnance,a_vie:rx.a_vie||false,date_fin:rx.date_fin||null}); }); }
+    updateBar();
+  });
+  supaGet("labos?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.labos[pid]=rows.map(function(l){ return Object.assign({},l,{patientId:l.patient_id,res:l.resultats||[]}); }); }
+    updateBar();
+  });
+  supaGet("rdv?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.rdv=rows.map(function(r){return Object.assign({},r,{patientId:r.patient_id,s:r.statut,c:r.color});}); }
+    updateBar();
+  });
+  supaGet("imagerie?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.imagerie[pid]=rows.map(function(i){ return Object.assign({},i,{patientId:i.patient_id,cr:i.conclusion,res:i.resultat,rc:i.resultat==="Normal"?"g":"a"}); }); }
+    updateBar();
+  });
+  supaGet("consultations?patient_id=eq."+pid+"&select=*&order=created_at.desc", function(rows){
+    if(rows){ DB.consultations[pid]=rows; }
+    updateBar();
+  });
+  supaGet("vaccins?patient_id=eq."+pid+"&select=*&order=created_at.asc", function(rows){
+    if(rows){ DB.vaccins[pid]=rows; }
+    updateBar();
+  });
+  supaGet("seen_items?select=item_id,item_type,created_at", function(rows){
+    _seen = {}; _seenBaseline = null;
+    if (rows){ rows.forEach(function(r){
+      if (r.item_type === "baseline"){ _seenBaseline = r.created_at; return; }
+      if (!_seen[r.item_type]) _seen[r.item_type] = [];
+      _seen[r.item_type].push(r.item_id);
+    }); }
+    updateBar();
+  });
+  supaGet("users?select=*", function(rows){
+    if(rows && rows.length){
+      var me = DB.users[0];
+      DB.users = [me].concat(rows.filter(function(u){ return u.id !== me.id; }));
+    }
+    updateBar();
   });
 }
 
@@ -538,9 +627,22 @@ function buildHeader() {
   document.getElementById("pav").textContent = p.initials||"?";
   document.getElementById("pav").style.background = p.color||"var(--blue)";
   document.getElementById("pnam").textContent = p.prenom+" "+p.nom;
-  document.getElementById("pmet").textContent = (p.age||"?")+" ans · Groupe "+(p.groupe||"?")+" · "+(p.ville||"?");
+  var ai = ageInfo(p.dob);
+  var ageTxt = ai.months!==null ? ai.label : (p.age||"?")+" ans";
+  document.getElementById("pmet").textContent = ageTxt+" · Groupe "+(p.groupe||"?")+" · "+(p.ville||"?");
   if (p.consentement) {
     document.getElementById("pconsent").innerHTML = '<div class="p-consent">✓ Consentement du '+p.consentement.date+'</div>';
+  }
+  // Compte famille : bouton pour changer de dossier
+  var pc = document.getElementById("pcard");
+  var oldBtn = document.getElementById("fam-switch"); if(oldBtn) oldBtn.remove();
+  if (USR && USR.linkedPatients && USR.linkedPatients.length && pc) {
+    var b = document.createElement("button");
+    b.id = "fam-switch";
+    b.textContent = "⇄ Changer de dossier";
+    b.style.cssText = "margin-top:8px;background:rgba(255,255,255,.14);border:1.5px solid rgba(255,255,255,.4);color:#fff;border-radius:99px;padding:6px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer";
+    b.onclick = backToFamily;
+    pc.appendChild(b);
   }
 }
 
@@ -561,12 +663,230 @@ function showTab(tab) {
   else if (tab==="med") h = tabMed();
   else if (tab==="rdv") h = tabRdv();
   else if (tab==="img") h = tabImg();
+  else if (tab==="vax") h = tabVax();
+  else if (tab==="car") h = tabCarnet();
   ct.innerHTML = h;
   ct.scrollTop = 0;
 }
 
 function emp(ico,txt){ return '<div class="empty"><span class="empty-i">'+ico+'</span>'+txt+'</div>'; }
 function bdg(t,c){ return '<span class="b '+c+'">'+t+'</span>'; }
+
+// ═══════════ MODULE VACCINATION + CARNET ═══════════
+function _pFRv(s){ var m=String(s||"").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
+function _fmtFR(d){ return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+d.getFullYear(); }
+function ageInfo(dob){
+  var d=_pFRv(dob); if(!d) return {years:null,months:null,label:"—"};
+  var now=new Date();
+  var months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+  if(now.getDate()<d.getDate()) months--;
+  var years=Math.floor(months/12);
+  var label = months<24 ? months+" mois" : years+" ans";
+  return {years:years, months:months, label:label};
+}
+function isMinorP(p){ var a=ageInfo(p&&p.dob); return a.months!==null && a.months<216; }
+
+// Calendrier vaccinal marocain (référentiel indicatif — à valider médicalement)
+var VAX_CHILD=[
+  {code:"bcg",m:0,nom:"BCG",dose:"Dose unique"},
+  {code:"hb",m:0,nom:"Hépatite B",dose:"Naissance"},
+  {code:"vpo",m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
+  {code:"penta",m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose"},
+  {code:"vpo",m:2,nom:"VPO (Polio orale)",dose:"1re dose"},
+  {code:"pneumo",m:2,nom:"Pneumocoque (PCV)",dose:"1re dose"},
+  {code:"rota",m:2,nom:"Rotavirus",dose:"1re dose"},
+  {code:"penta",m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose"},
+  {code:"vpo",m:3,nom:"VPO (Polio orale)",dose:"2e dose"},
+  {code:"pneumo",m:3,nom:"Pneumocoque (PCV)",dose:"2e dose"},
+  {code:"rota",m:3,nom:"Rotavirus",dose:"2e dose"},
+  {code:"penta",m:4,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose"},
+  {code:"vpo",m:4,nom:"VPO (Polio orale)",dose:"3e dose"},
+  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose"},
+  {code:"pneumo",m:12,nom:"Pneumocoque (PCV)",dose:"Rappel 12 mois"},
+  {code:"rr",m:18,nom:"Rougeole-Rubéole (RR)",dose:"2e dose"},
+  {code:"dtc_r",m:18,nom:"DTC rappel",dose:"Rappel 18 mois"},
+  {code:"vpo",m:18,nom:"VPO (Polio orale)",dose:"Rappel 18 mois"},
+  {code:"dtc_r",m:60,nom:"DTC rappel",dose:"Rappel 5 ans"},
+  {code:"vpo",m:60,nom:"VPO (Polio orale)",dose:"Rappel 5 ans"}
+];
+
+function buildVaxSchedule(p){
+  var vax=(DB.vaccins&&DB.vaccins[p.id])||[];
+  var done=vax.slice().sort(function(a,b){var da=_pFRv(a.date),db_=_pFRv(b.date);return (da&&db_)?da-db_:0;});
+  var res={late:[],upcoming:[],done:done};
+  var ai=ageInfo(p.dob), birth=_pFRv(p.dob), now=new Date();
+  if(!birth) return res;
+
+  function countDone(code){ return done.filter(function(v){return v.vac_code===code;}).length; }
+
+  if(ai.months<216){
+    // ENFANT : échéancier du calendrier — chaque ligne matchée dans l'ordre par code
+    var seen={};
+    VAX_CHILD.forEach(function(e){
+      seen[e.code]=(seen[e.code]||0)+1;
+      var idx=seen[e.code]; // n-ième occurrence de ce code
+      var due=new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
+      if(countDone(e.code)>=idx) return; // déjà fait
+      var item={nom:e.nom,dose:e.dose,due:due,code:e.code};
+      if(due<=now) res.late.push(item);
+      else if(e.m<=ai.months+12) res.upcoming.push(item); // horizon 12 mois
+    });
+  } else {
+    // ADULTE : recommandations
+    var lastTet=done.filter(function(v){return v.vac_code==="dtc_r"||v.vac_code==="tetanos";}).pop();
+    if(lastTet){
+      var d=_pFRv(lastTet.date);
+      if(d){ var due=new Date(d.getFullYear()+10,d.getMonth(),d.getDate());
+        var item={nom:"Tétanos-diphtérie (dTP)",dose:"Rappel (tous les 10 ans)",due:due,code:"tetanos"};
+        if(due<=now) res.late.push(item); else res.upcoming.push(item); }
+    } else {
+      res.late.push({nom:"Tétanos-diphtérie (dTP)",dose:"Rappel — date du dernier inconnue",due:null,code:"tetanos"});
+    }
+    var chronic=((p.pathologies||[]).concat(p.antecedents||[]).join(" ")).match(/diab|irc|r[ée]nal|dialys|asthme|bpco|cardi|immuno/i);
+    if(chronic||ai.years>=65){
+      var flu=done.filter(function(v){return v.vac_code==="grippe";}).pop();
+      var fluD=flu?_pFRv(flu.date):null;
+      var thisSeason=new Date(now.getFullYear(),9,1); // 1er octobre
+      if(now>=thisSeason && (!fluD||fluD<thisSeason))
+        res.late.push({nom:"Grippe saisonnière",dose:"Dose annuelle (recommandée : pathologie chronique)",due:thisSeason,code:"grippe"});
+      else if(!fluD||fluD<thisSeason)
+        res.upcoming.push({nom:"Grippe saisonnière",dose:"Dose annuelle (recommandée)",due:thisSeason,code:"grippe"});
+    }
+    if(!countDone("hb") && ((p.pathologies||[]).join(" ")).match(/irc|dialys/i))
+      res.upcoming.push({nom:"Hépatite B",dose:"Schéma complet (recommandé : dialyse)",due:null,code:"hb"});
+  }
+  return res;
+}
+
+function tabVax(){
+  var p=PAT, s=buildVaxSchedule(p);
+  var h='';
+  function row(it,cls,icon){
+    var dueTxt=it.due?_fmtFR(it.due):"—";
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5E4">'+
+      '<span style="font-size:18px">'+icon+'</span><div style="flex:1;min-width:0">'+
+      '<div style="font-size:13.5px;font-weight:700">'+it.nom+'</div>'+
+      '<div style="font-size:11px;color:#78716C">'+it.dose+(it.due?' · prévu le '+dueTxt:'')+'</div></div>'+
+      (cls==='l'?'<span style="font-size:9px;font-weight:800;background:#FDECEC;color:#B4001A;padding:3px 8px;border-radius:99px">EN RETARD</span>':'')+'</div>';
+  }
+  if(s.late.length){
+    h+='<div class="card" style="border:1.5px solid #F5C6C6"><div class="ctit" style="color:#B4001A">🔴 Rappels en retard ('+s.late.length+')</div>';
+    s.late.forEach(function(it){h+=row(it,'l','💉');}); h+='</div>';
+  }
+  if(s.upcoming.length){
+    h+='<div class="card"><div class="ctit">📅 À venir</div>';
+    s.upcoming.forEach(function(it){h+=row(it,'u','💉');}); h+='</div>';
+  }
+  h+='<div class="card"><div class="ctit">✅ Vaccins reçus ('+s.done.length+')</div>';
+  if(!s.done.length) h+='<div style="font-size:12.5px;color:#78716C;padding:6px 0">Aucun vaccin enregistré pour le moment.</div>';
+  s.done.slice().reverse().forEach(function(v){
+    var drU=DB.users.find(function(u){return u.id===v.par;});
+    var drN=drU?((drU.titre?drU.titre+" ":"")+drU.prenom+" "+drU.nom):"";
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5E4">'+
+      '<span style="font-size:18px">✅</span><div style="flex:1;min-width:0">'+
+      '<div style="font-size:13.5px;font-weight:700">'+v.nom+'</div>'+
+      '<div style="font-size:11px;color:#78716C">'+(v.dose||"")+' · '+(v.date||"")+(v.lot?' · Lot '+v.lot:'')+(drN?' · '+drN:'')+'</div></div></div>';
+  });
+  h+='</div>';
+  h+='<button onclick="printCarnetVax()" style="width:100%;background:#0F766E;color:#fff;border:none;border-radius:13px;padding:14px;font-size:14px;font-weight:800;font-family:inherit;margin-top:4px">🖨️ Imprimer le carnet de vaccination</button>';
+  h+='<div style="font-size:10px;color:#A8A29E;text-align:center;margin-top:10px">Échéancier indicatif basé sur le calendrier vaccinal — référence : votre médecin.</div>';
+  return h;
+}
+
+function updateVaxBadge(){
+  var t=document.querySelector('.tab[data-t="vax"]'); if(!t||!PAT) return;
+  var old=t.querySelector('.tab-dot'); if(old) old.remove();
+  var s=buildVaxSchedule(PAT);
+  if(s.late.length){
+    var d=document.createElement('span'); d.className='tab-dot'; d.textContent=s.late.length>9?'9+':s.late.length;
+    t.appendChild(d);
+  }
+}
+
+function printCarnetVax(){
+  var p=PAT, s=buildVaxSchedule(p), ai=ageInfo(p.dob);
+  var rowsDone=s.done.map(function(v){
+    return '<tr><td>'+v.nom+'</td><td>'+(v.dose||"")+'</td><td>'+(v.date||"")+'</td><td>'+(v.lot||"—")+'</td></tr>';
+  }).join('');
+  var rowsLate=s.late.map(function(it){
+    return '<tr class="late"><td>'+it.nom+'</td><td>'+it.dose+'</td><td>'+(it.due?_fmtFR(it.due):"—")+'</td><td>EN RETARD</td></tr>';
+  }).join('');
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carnet de vaccination</title><style>'+
+    'body{font-family:Helvetica,Arial,sans-serif;margin:28px;color:#1C1917}'+
+    'h1{font-size:19px;color:#0F766E;margin-bottom:2px} .sub{font-size:11px;color:#78716C;margin-bottom:14px}'+
+    '.id{background:#F0FDFA;border:1px solid #C6E9E4;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:16px}'+
+    'h2{font-size:13px;margin:16px 0 6px} table{width:100%;border-collapse:collapse;font-size:11px}'+
+    'th{background:#0F766E;color:#fff;text-align:left;padding:6px 8px} td{padding:6px 8px;border-bottom:1px solid #E7E5E4}'+
+    'tr.late td{color:#B4001A;font-weight:700}'+
+    '.foot{margin-top:22px;font-size:9px;color:#78716C;text-align:center}'+
+    '.sig{margin-top:26px;display:flex;justify-content:space-between;font-size:11px}'+
+    '@media print{.noprint{display:none}}</style></head><body>'+
+    '<h1>💉 Carnet de vaccination</h1><div class="sub">MediReport · édité le '+_fmtFR(new Date())+'</div>'+
+    '<div class="id"><b>'+p.prenom+' '+p.nom+'</b> · Né(e) le '+(p.dob||"—")+' ('+ai.label+')'+(p.groupe?' · Groupe '+p.groupe:'')+(p.cin?' · CIN '+p.cin:'')+'</div>'+
+    '<h2>Vaccins reçus</h2><table><tr><th>Vaccin</th><th>Dose</th><th>Date</th><th>Lot</th></tr>'+(rowsDone||'<tr><td colspan="4">Aucun vaccin enregistré</td></tr>')+'</table>'+
+    (rowsLate?'<h2>Rappels en retard</h2><table><tr><th>Vaccin</th><th>Dose</th><th>Prévu le</th><th>Statut</th></tr>'+rowsLate+'</table>':'')+
+    '<div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>'+
+    '<div class="foot">MediReport · 🇲🇦 Conçu au Maroc · Document confidentiel · Échéancier indicatif — référence : votre médecin</div>'+
+    '<button class="noprint" onclick="window.print()" style="margin-top:18px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button>'+
+    '</body></html>';
+  var ov=document.createElement("div");
+  ov.id="carnet-overlay";
+  ov.style.cssText="position:fixed;inset:0;z-index:10000;background:#fff;display:flex;flex-direction:column";
+  var bar=document.createElement("div");
+  bar.style.cssText="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0F766E;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)";
+  bar.innerHTML='<button onclick="document.getElementById(\'carnet-overlay\').remove()" style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;font-family:inherit">← Retour</button><b style="flex:1;font-size:14px">Carnet de vaccination</b>';
+  var fr=document.createElement("iframe");
+  fr.style.cssText="flex:1;border:none;width:100%;background:#fff";
+  ov.appendChild(bar); ov.appendChild(fr);
+  document.body.appendChild(ov);
+  fr.srcdoc=html;
+}
+
+function tabCarnet(){
+  var p=PAT, ai=ageInfo(p.dob);
+  var cons=sortByDate(DB.consultations[p.id]||[], 'date', true); // asc
+  var meas=[];
+  cons.forEach(function(c){
+    var ct=c.constantes||{};
+    var w=parseFloat(String(ct["Poids"]||"").replace(",", "."));
+    var t=parseFloat(String(ct["Taille"]||"").replace(",", "."));
+    var pc=parseFloat(String(ct["PC"]||"").replace(",", "."));
+    if(!isNaN(w)||!isNaN(t)||!isNaN(pc)) meas.push({date:c.date,w:isNaN(w)?null:w,t:isNaN(t)?null:t,pc:isNaN(pc)?null:pc});
+  });
+  var h='<div class="card"><div class="ctit">📔 Carnet de santé</div>'+
+    '<div style="font-size:13px"><b>'+p.prenom+' '+p.nom+'</b> · '+ai.label+'</div>'+
+    '<div style="font-size:11.5px;color:#78716C;margin-top:3px">Né(e) le '+(p.dob||"—")+(p.groupe?' · Groupe '+p.groupe:'')+'</div></div>';
+
+  function spark(vals,color,unit,title){
+    var pts=vals.filter(function(v){return v.v!==null;});
+    if(pts.length<1) return '';
+    var last=pts[pts.length-1];
+    var line='';
+    if(pts.length>=2){
+      var vmin=Math.min.apply(null,pts.map(function(x){return x.v;})),vmax=Math.max.apply(null,pts.map(function(x){return x.v;}));
+      var rng=(vmax-vmin)||1, sw=180, sh=44;
+      line='<svg viewBox="0 0 '+sw+' '+sh+'" style="width:100%;height:44px"><polyline points="'+
+        pts.map(function(pp,i){return (i*sw/(pts.length-1)).toFixed(1)+","+((sh-4-(pp.v-vmin)/rng*(sh-8))).toFixed(1);}).join(" ")+
+        '" fill="none" stroke="'+color+'" stroke-width="2.2" stroke-linecap="round"/></svg>';
+    }
+    return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">'+
+      '<b style="font-size:13px">'+title+'</b><span style="font-family:monospace;font-weight:800;font-size:15px;color:'+color+'">'+last.v+' '+unit+'</span></div>'+
+      line+'<div style="font-size:10px;color:#A8A29E">'+pts.length+' mesure'+(pts.length>1?'s':'')+' · dernière : '+last.d+'</div></div>';
+  }
+  h+=spark(meas.map(function(m){return {v:m.w,d:m.date};}),'#0F766E','kg','⚖️ Poids');
+  h+=spark(meas.map(function(m){return {v:m.t,d:m.date};}),'#1A6EFF','cm','📏 Taille');
+  h+=spark(meas.map(function(m){return {v:m.pc,d:m.date};}),'#7C3AED','cm','⭕ Périmètre crânien');
+  if(!meas.length) h+='<div class="card" style="text-align:center;color:#78716C;font-size:12.5px">Les mesures (poids, taille, PC) apparaîtront ici au fil des consultations pédiatriques.</div>';
+
+  var devs=cons.filter(function(c){return c.constantes&&c.constantes["Développement"];});
+  if(devs.length){
+    var lastD=devs[devs.length-1];
+    h+='<div class="card"><div class="ctit">🚼 Développement</div><div style="font-size:13px">'+lastD.constantes["Développement"]+'</div>'+
+      '<div style="font-size:10.5px;color:#A8A29E;margin-top:3px">Évalué le '+lastD.date+'</div></div>';
+  }
+  h+='<div style="font-size:10px;color:#A8A29E;text-align:center;margin-top:8px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>';
+  return h;
+}
 
 function tabSyn() {
   var p=PAT;
