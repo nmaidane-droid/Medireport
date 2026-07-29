@@ -5862,7 +5862,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
       <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="np-gr"><option value="">— Inconnu —</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
     </div>
     <div class="fr">
-      <div class="fg"><label>CIN <span style="color:var(--red)">*</span></label><input id="np-cin" value="${preCin}"/></div>
+      <div class="fg"><label>CIN <span style="color:var(--red)">*</span> <span style="font-weight:400;color:var(--g400);font-size:10px;text-transform:none;letter-spacing:0">(optionnel avant 16 ans)</span></label><input id="np-cin" value="${preCin}"/></div>
       <div class="fg"><label>Lieu de naissance <span style="color:var(--red)">*</span></label><input id="np-lieu"/></div>
     </div>
     <div class="fr"><div class="fg"><label>Téléphone <span style="color:var(--red)">*</span></label><input id="np-tel"/></div><div class="fg"><label>Ville <span style="color:var(--red)">*</span></label><input id="np-vl"/></div></div>
@@ -5888,7 +5888,8 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     if(!dobVal) missing.push("Date de naissance");
     if(!document.getElementById("np-sx").value) missing.push("Sexe");
     if(!document.getElementById("np-gr").value) missing.push("Groupe sanguin");
-    if(!document.getElementById("np-cin").value.trim()) missing.push("CIN");
+    const _ageY=dobVal?Math.floor((Date.now()-new Date(dobVal).getTime())/31557600000):99;
+    if(_ageY>=16 && !document.getElementById("np-cin").value.trim()) missing.push("CIN");
     if(!document.getElementById("np-lieu").value.trim()) missing.push("Lieu de naissance");
     if(!document.getElementById("np-tel").value.trim()) missing.push("Téléphone");
     if(!document.getElementById("np-vl").value.trim()) missing.push("Ville");
@@ -5960,7 +5961,7 @@ function showEditPatient(pid){
       <div class="fg"><label>Sexe <span style="color:var(--red)">*</span></label><select id="ep-sx"><option value="">— Choisir —</option><option value="M"${p.sexe==="M"?" selected":""}>Homme</option><option value="F"${p.sexe==="F"?" selected":""}>Femme</option></select></div>
       <div class="fg"><label>Groupe sanguin <span style="color:var(--red)">*</span></label><select id="ep-gr"><option value="">— Inconnu —</option><option${p.groupe==="A+"?" selected":""}>A+</option><option${p.groupe==="A-"?" selected":""}>A-</option><option${p.groupe==="B+"?" selected":""}>B+</option><option${p.groupe==="B-"?" selected":""}>B-</option><option${p.groupe==="AB+"?" selected":""}>AB+</option><option${p.groupe==="AB-"?" selected":""}>AB-</option><option${p.groupe==="O+"?" selected":""}>O+</option><option${p.groupe==="O-"?" selected":""}>O-</option></select></div>
     </div>
-    <div class="fr"><div class="fg"><label>CIN <span style="color:var(--red)">*</span></label><input id="ep-cin" value="${p.cin||""}"/></div><div class="fg"><label>Téléphone <span style="color:var(--red)">*</span></label><input id="ep-tel" value="${p.tel&&p.tel!=="—"?p.tel:""}"/></div></div>
+    <div class="fr"><div class="fg"><label>CIN <span style="color:var(--red)">*</span> <span style="font-weight:400;color:var(--g400);font-size:10px;text-transform:none;letter-spacing:0">(optionnel avant 16 ans)</span></label><input id="ep-cin" value="${p.cin||""}"/></div><div class="fg"><label>Téléphone <span style="color:var(--red)">*</span></label><input id="ep-tel" value="${p.tel&&p.tel!=="—"?p.tel:""}"/></div></div>
     <div class="fr"><div class="fg"><label>Ville <span style="color:var(--red)">*</span></label><input id="ep-vl" value="${p.ville&&p.ville!=="—"?p.ville:""}"/></div><div class="fg"><label>Lieu de naissance <span style="color:var(--red)">*</span></label><input id="ep-lieu" value="${p.lieu_naissance||""}"/></div></div>
     <div class="fg"><label>Adresse <span style="color:var(--red)">*</span></label><input id="ep-adr" value="${p.adresse||""}"/></div>
     <div class="fg"><label>Antécédents <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-ant" value="${(p.antecedents||[]).join(", ")}"/></div>
@@ -5976,7 +5977,8 @@ function showEditPatient(pid){
     if(!G("ep-dob").value) epMissing.push("Date de naissance");
     if(!G("ep-sx").value) epMissing.push("Sexe");
     if(!G("ep-gr").value) epMissing.push("Groupe sanguin");
-    if(!G("ep-cin").value.trim()) epMissing.push("CIN");
+    const _epAgeY=G("ep-dob").value?Math.floor((Date.now()-new Date(G("ep-dob").value).getTime())/31557600000):99;
+    if(_epAgeY>=16 && !G("ep-cin").value.trim()) epMissing.push("CIN");
     if(!G("ep-tel").value.trim()) epMissing.push("Téléphone");
     if(!G("ep-vl").value.trim()) epMissing.push("Ville");
     if(!G("ep-lieu").value.trim()) epMissing.push("Lieu de naissance");
