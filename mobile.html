@@ -192,7 +192,7 @@ function dlGuideFeedback(a){
   if (a.dataset.busy) return;
   a.dataset.busy = "1";
   var orig = a.innerHTML;
-  a.innerHTML = "⏳ Téléchargement…";
+  a.innerHTML = "⏳ En cours…";
   a.style.background = "#F0FDFA"; a.style.pointerEvents = "none"; a.style.opacity = ".8";
   setTimeout(function(){
     a.innerHTML = "✓ Téléchargé";
