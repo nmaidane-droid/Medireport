@@ -100,6 +100,71 @@ export default async function handler(req) {
       if (method === 'GET') effectivePath = effectivePath + sep + 'user_id=eq.' + encodeURIComponent(myUserId);
     }
   }
+  // ── Labo / Imagerie : accès limité aux patients explicitement autorisés (patient_access) ──
+  if (role === 'laboratoire' || role === 'imagerie') {
+    const myUserId = session.u;
+    const sep2 = effectivePath.includes('?') ? '&' : '?';
+    if (table === 'backups' || table === 'patient_links') return json({ error: 'Accès refusé' }, 403);
+    if (table === 'users') {
+      effectivePath = 'users?select=id,prenom,nom,titre,spec,structure,role,color,initials';
+    } else if (table === 'seen_items' || table === 'notifications_vues') {
+      if (method === 'GET') effectivePath = effectivePath + sep2 + 'user_id=eq.' + encodeURIComponent(myUserId);
+    } else if (table === 'patient_access') {
+      if (method !== 'GET') return json({ error: 'Accès refusé' }, 403);
+      effectivePath = 'patient_access?select=*&user_id=eq.' + encodeURIComponent(myUserId);
+    } else if (['patients','consultations','labos','prescriptions','imagerie','rdv','vaccins'].includes(table)) {
+      // Charger les accès actifs de ce compte
+      let accs = [];
+      try {
+        const ar = await fetch(SB_URL + '/rest/v1/patient_access?user_id=eq.' + encodeURIComponent(myUserId)
+          + '&select=patient_id,modules,expiry', { headers: { apikey: SRK, Authorization: 'Bearer ' + SRK } });
+        if (ar.ok) accs = await ar.json();
+      } catch { accs = []; }
+      const now = new Date();
+      const valid = (Array.isArray(accs) ? accs : []).filter(a => {
+        if (!a.expiry) return true;
+        const p = String(a.expiry).split('/');
+        if (p.length !== 3) return true;
+        return new Date(+p[2], +p[1] - 1, +p[0]) >= now;
+      });
+      const MOD = { consultations: 'consultations', labos: 'labo', imagerie: 'imagerie',
+                    prescriptions: 'prescriptions', rdv: 'rdv', vaccins: 'vaccins' };
+      const needed = MOD[table] || null; // patients : tout accès actif donne droit à la fiche
+      const pids = valid
+        .filter(a => !needed || (a.modules || []).includes('all') || (a.modules || []).includes(needed))
+        .map(a => a.patient_id);
+
+      if (method === 'GET') {
+        const key = table === 'patients' ? 'id' : 'patient_id';
+        const re = new RegExp('[?&]' + key + '=eq\\.([^&]+)');
+        const m2 = effectivePath.match(re);
+        if (m2) {
+          if (!pids.includes(decodeURIComponent(m2[1]))) return json({ error: 'Accès refusé' }, 403);
+        } else {
+          if (!pids.length) return json([], 200); // aucun accès : liste vide
+          effectivePath = effectivePath + sep2 + key + '=in.(' + pids.map(encodeURIComponent).join(',') + ')';
+        }
+      } else {
+        // Écritures : uniquement la table métier du rôle, avec patient autorisé
+        const ownTable = role === 'laboratoire' ? 'labos' : 'imagerie';
+        if (table !== ownTable) return json({ error: 'Accès refusé' }, 403);
+        if (method === 'POST') {
+          try {
+            const rows = JSON.parse(body.body || '[]');
+            const list = Array.isArray(rows) ? rows : [rows];
+            if (!list.length || list.some(r => !pids.includes(r.patient_id)))
+              return json({ error: 'Accès refusé' }, 403);
+          } catch { return json({ error: 'Bad request' }, 400); }
+        } else {
+          // PATCH/DELETE : exiger un filtre patient_id autorisé
+          const m3 = effectivePath.match(/[?&]patient_id=eq\.([^&]+)/);
+          if (!m3 || !pids.includes(decodeURIComponent(m3[1]))) return json({ error: 'Accès refusé' }, 403);
+        }
+      }
+    }
+    // demandes_labo / demandes_avis : flux de travail, inchangés
+  }
+
   // Table backups : admin uniquement
   if (table === 'backups' && role !== 'admin') return json({ error: 'Accès refusé' }, 403);
   // Vaccins : écriture réservée aux soignants et à l'admin
