@@ -896,7 +896,8 @@ async function syncChanged(changed){
   else if(table==="consultations") data = rows.map(c=>({
     id:c.id, patient_id:c.patientId||c.patient_id, date:c.date||null,
     dr:c.dr||null, spec:c.spec||null, motif:c.motif||null, cr:c.cr||null,
-    tags:c.tags||[], statut:c.statut||null, sc:c.sc||null
+    tags:c.tags||[], statut:c.statut||null, sc:c.sc||null,
+    constantes:c.constantes||null
   }));
   else if(table==="prescriptions") data = rows.map(rx=>({
     id:rx.id, patient_id:rx.patientId||rx.patient_id,
