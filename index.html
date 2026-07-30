@@ -140,8 +140,8 @@ input:hover:not(:focus),select:hover:not(:focus){border-color:var(--g400)}
 .dv-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .dv-tag{background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
 .dv-tag-red{background:rgba(229,57,53,.3)}
-.dv-tabs{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
-.dv-tab{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;font-weight:700;color:var(--g600);cursor:pointer;background:#fff;border:1.5px solid var(--g200);border-radius:12px;transition:var(--tr);white-space:nowrap;user-select:none;box-shadow:var(--shadow-sm)}
+.dv-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;padding:2px}
+.dv-tab{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;font-size:12.5px;font-weight:700;color:var(--g600);cursor:pointer;background:#fff;border:1.5px solid var(--g200);border-radius:12px;transition:var(--tr);white-space:nowrap;user-select:none;box-shadow:var(--shadow-sm)}
 .dv-tab-ico{font-size:15px;line-height:1}
 .dv-tab:hover:not(.on){border-color:var(--blue);color:var(--blue);background:var(--blue-l);transform:translateY(-1px);box-shadow:var(--shadow-md)}
 .dv-tab.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.30)}
@@ -5934,13 +5934,15 @@ async function demanderAcces(patientId, ov){
 }
 
 // ═══ Sélecteur de compte parent avec recherche (nom, prénom, CIN, identifiant) ═══
-function addFamilyLinkFromEdit(pid){
-  const inp=G("fam-add");
-  const uid2=inp&&inp.dataset.uid;
-  if(!uid2){toast("Sélectionnez un compte dans la liste","error");return;}
-  const rel=G("fam-add-rel").value;
-  const n=createFamilyLinks(pid,[{uid:uid2,relation:rel}]);
-  toast(n?"Compte lié ✓ (effectif à sa prochaine connexion)":"Ce lien existe déjà","");
+function addFamilyLinksFromEdit(pid){
+  const picks=[
+    {uid:(G("fam-pere")&&G("fam-pere").dataset.uid)||"",relation:"pere"},
+    {uid:(G("fam-mere")&&G("fam-mere").dataset.uid)||"",relation:"mere"},
+    {uid:(G("fam-tuteur")&&G("fam-tuteur").dataset.uid)||"",relation:"tuteur"}
+  ];
+  if(!picks.some(x=>x.uid)){toast("Sélectionnez au moins un compte dans les listes","error");return;}
+  const n=createFamilyLinks(pid,picks);
+  toast(n?n+" compte(s) lié(s) ✓ (effectif à leur prochaine connexion)":"Ces liens existent déjà","");
   document.querySelectorAll(".mov").forEach(m=>m.remove());
   showEditPatient(pid);
 }
@@ -6130,11 +6132,8 @@ function showEditPatient(pid){
           <button class="btn bs bsm" onclick="toggleLink('${l.id}',${!l.actif});this.closest('.mov').remove();showEditPatient('${p.id}')">${l.actif?"Désactiver":"Réactiver"}</button></div>`;}).join("")
         :`<div style="font-size:12px;color:var(--g400);padding:4px 0">Aucun compte parent lié.</div>`;
       return h;})()}
-    <div class="fr" style="align-items:flex-end;margin-top:8px">
-      ${famPickerHTML('fam-add','Ajouter un compte (nom, prénom, CIN)')}
-      <div class="fg" style="max-width:130px"><label>Relation</label><select id="fam-add-rel"><option value="pere">Père</option><option value="mere">Mère</option><option value="tuteur">Tuteur</option></select></div>
-      <button class="btn bs" style="margin-bottom:2px" onclick="addFamilyLinkFromEdit('${p.id}')">+ Lier</button>
-    </div>
+    <div class="fr3" style="margin-top:8px">${famPickerHTML('fam-pere','Compte du père')}${famPickerHTML('fam-mere','Compte de la mère')}${famPickerHTML('fam-tuteur','Compte du tuteur')}</div>
+    <button class="btn bs" style="margin-top:8px" onclick="addFamilyLinksFromEdit('${p.id}')">+ Lier les comptes sélectionnés</button>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);
   famPickerInit(ov,p.id);
   ov.querySelector("#ep-s").onclick=()=>{
