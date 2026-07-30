@@ -73,10 +73,32 @@ export default async function handler(req) {
         headers: { apikey: SRK, Authorization: 'Bearer ' + SRK }
       });
       if (lr.ok) {
-        const links = await lr.json();
+        let links = await lr.json();
         if (Array.isArray(links) && links.length) {
-          payload.pl = links.map(l => l.patient_id);
-          safeUser.linkedPatients = links;
+          // Majorité = coupure automatique : on exclut les dossiers d'enfants devenus majeurs (>= 216 mois)
+          try {
+            const ids = links.map(l => l.patient_id);
+            const pr = await fetch(SB_URL + '/rest/v1/patients?id=in.(' + ids.map(encodeURIComponent).join(',') + ')&select=id,dob', {
+              headers: { apikey: SRK, Authorization: 'Bearer ' + SRK }
+            });
+            if (pr.ok) {
+              const pats = await pr.json();
+              const now = new Date();
+              const minorIds = new Set(pats.filter(p => {
+                const m = String(p.dob || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (!m) return true; // dob illisible : on garde (prudence, cas rare)
+                const b = new Date(+m[3], +m[2] - 1, +m[1]);
+                let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+                if (now.getDate() < b.getDate()) months--;
+                return months < 216;
+              }).map(p => p.id));
+              links = links.filter(l => minorIds.has(l.patient_id));
+            }
+          } catch { /* en cas d'échec du filtre, on ne coupe pas (les liens restent) */ }
+          if (links.length) {
+            payload.pl = links.map(l => l.patient_id);
+            safeUser.linkedPatients = links;
+          }
         }
       }
     } catch { /* table absente ou indisponible : mode mono-dossier */ }
