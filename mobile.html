@@ -946,7 +946,7 @@ function printCarnetSanteM(){
     '<h2>Mesures détaillées</h2><table><tr><th>Date</th><th>Poids</th><th>Taille</th><th>PC</th></tr>'+(rows||'<tr><td colspan="4">Aucune mesure</td></tr>')+'</table>'+
     (lastDev?'<h2>🚼 Développement</h2><div class="dev">'+lastDev.constantes["Développement"]+' <span style="color:#78716C">— évalué le '+lastDev.date+'</span></div>':'')+
     '<div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>'+
-    '<div class="foot">MediReport · 🇲🇦 Conçu au Maroc · Document confidentiel · Courbes OMS : prochaine évolution</div>'+
+    '<div class="foot">MediReport · 🇲🇦 Conçu au Maroc · Document confidentiel</div>'+
     '<button class="noprint" onclick="window.print()" style="margin-top:18px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button>'+
     '</body></html>';
   var ov=document.createElement("div");
@@ -1006,7 +1006,6 @@ function tabCarnet(){
       '<div style="font-size:10.5px;color:#A8A29E;margin-top:3px">Évalué le '+lastD.date+'</div></div>';
   }
   h+='<button onclick="printCarnetSanteM()" style="width:100%;background:#0F766E;color:#fff;border:none;border-radius:13px;padding:14px;font-size:14px;font-weight:800;font-family:inherit;margin-top:4px">🖨️ Imprimer le carnet de santé</button>';
-  h+='<div style="font-size:10px;color:#A8A29E;text-align:center;margin-top:10px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>';
   return h;
 }
 

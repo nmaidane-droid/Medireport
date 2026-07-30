@@ -2484,7 +2484,7 @@ function rDossier(){
   if(!p){G("pg-dossier").innerHTML=`<div style="padding:40px;text-align:center;color:var(--g400)">Sélectionnez un patient</div>`;return;}
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
-  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"vaccins",l:"Vaccination",i:"💉",show:true},{id:"carnet",l:"Carnet",i:"📔",show:isMinorPatient(p)||((DB.patient_links||[]).some(l=>l.patientId===p.id))},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
+  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"vaccins",l:"Vaccination",i:"💉",show:true},{id:"carnet",l:"Carnet",i:"📔",show:isMinorPatient(p)},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
   const _uc=getUnseenCounts(p.id);const _vaxLate=buildVaxScheduleIdx(p).late.length;const tabsHtml=tabs.map(t=>{let n=_uc[{consultations:"el_consult",labo:"el_labo",imagerie:"el_img",prescriptions:"el_rx",rdv:"el_rdv"}[t.id]]||0;if(t.id==="vaccins")n=_vaxLate;return `<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}${n?`<span class="tab-badge">${n}</span>`:""}</div>`;}).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
@@ -2824,7 +2824,7 @@ function printCarnetSante(pid){
     <h2>Mesures détaillées</h2><table><tr><th>Date</th><th>Poids</th><th>Taille</th><th>PC</th></tr>${rows||'<tr><td colspan="4">Aucune mesure enregistrée</td></tr>'}</table>
     ${lastDev?`<h2>🚼 Développement psychomoteur</h2><div class="dev">${lastDev.constantes["Développement"]} <span style="color:#78716C">— évalué le ${lastDev.date}</span></div>`:""}
     <div class="sig"><div>Cachet du praticien :</div><div>Signature :</div></div>
-    <div class="foot">MediReport Pro · 🇲🇦 Conçu au Maroc · Document confidentiel · Courbes de référence OMS : prochaine évolution</div>
+    <div class="foot">MediReport Pro · 🇲🇦 Conçu au Maroc · Document confidentiel</div>
     <button class="noprint" onclick="window.print()" style="margin-top:20px;background:#0F766E;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button>
     </body></html>`;
   const w=window.open("","_blank");
@@ -2834,17 +2834,7 @@ function printCarnetSante(pid){
 function dCarnet(){
   const p=DB.patients.find(x=>x.id===currentPatientId);
   const ai=ageInfoX(p.dob);
-  if(!isMinorPatient(p)){
-    // Patient majeur : le carnet n'affiche plus que la gestion des liens parents (bascule 18 ans)
-    G("dossier-content").innerHTML=`
-      <div style="font-size:15px;font-weight:800;margin-bottom:14px">📔 Compte famille — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div>
-      <div class="card" style="margin-bottom:14px;border:1.5px solid #FDE68A;background:#FFFBEB">
-        <div style="font-size:13px;line-height:1.6">🎂 <b>${p.prenom} est désormais majeur(e).</b> L'accès des comptes parents à son dossier est <b>automatiquement suspendu depuis sa majorité</b> — les liens ci-dessous sont inactifs de fait.
-        Vous pouvez les désactiver définitivement pour solder la transition, et remettre à ${p.prenom} son accès mobile personnel.</div>
-      </div>
-      <div class="card"><div class="ctit"><span class="ci">👨‍👩‍👧</span> Comptes parents liés</div>${familyLinksHtml(p)}</div>`;
-    return;
-  }
+
   const cons=sortByDate(DB.consultations[p.id]||[], 'date', true);
   const meas=[];
   cons.forEach(c=>{
@@ -2878,8 +2868,7 @@ function dCarnet(){
     ${chart(meas.map(m=>({v:m.pc,d:m.date})),"#7C3AED","cm","⭕ Périmètre crânien")}
     ${!meas.length?'<div class="card" style="text-align:center;color:var(--g400);font-size:13px;margin-bottom:14px">Les mesures (poids, taille, PC) saisies dans les consultations pédiatriques apparaîtront ici.</div>':""}
     ${lastDev?`<div class="card" style="margin-bottom:14px"><div class="ctit"><span class="ci">🚼</span> Développement psychomoteur</div><div style="font-size:13.5px">${lastDev.constantes["Développement"]}</div><div style="font-size:11px;color:var(--g400);margin-top:3px">Évalué le ${lastDev.date}</div></div>`:""}
-    <div class="card"><div class="ctit"><span class="ci">👨‍👩‍👧</span> Compte famille</div>${familyLinksHtml(p)}</div>
-    <div style="font-size:10.5px;color:var(--g400);text-align:center;margin-top:12px">Courbes de référence OMS (percentiles) : prochaine évolution.</div>`;
+`;
 }
 
 function familyLinksHtml(p){
@@ -5863,6 +5852,64 @@ async function demanderAcces(patientId, ov){
   }
 }
 
+// ═══ Sélecteur de compte parent avec recherche (nom, prénom, CIN, identifiant) ═══
+function addFamilyLinkFromEdit(pid){
+  const inp=G("fam-add");
+  const uid2=inp&&inp.dataset.uid;
+  if(!uid2){toast("Sélectionnez un compte dans la liste","error");return;}
+  const rel=G("fam-add-rel").value;
+  const n=createFamilyLinks(pid,[{uid:uid2,relation:rel}]);
+  toast(n?"Compte lié ✓ (effectif à sa prochaine connexion)":"Ce lien existe déjà","");
+  document.querySelectorAll(".mov").forEach(m=>m.remove());
+  showEditPatient(pid);
+}
+function famCandidates(excludePid){
+  return DB.users.filter(u=>u.role==="patient" && u.patientId!==excludePid).map(u=>{
+    const pp=DB.patients.find(x=>x.id===u.patientId);
+    return {uid:u.id, label:`${u.prenom||""} ${u.nom||""}`.trim(), cin:(pp&&pp.cin)||"", login:u.login||"",
+            search:(`${u.prenom||""} ${u.nom||""} ${(pp&&pp.cin)||""} ${u.login||""}`).toLowerCase()};
+  });
+}
+function famPickerHTML(fid,label){
+  return `<div class="fg" style="position:relative"><label>${label}</label>
+    <input id="${fid}" placeholder="Nom, prénom ou CIN…" autocomplete="off" data-uid=""/>
+    <div id="${fid}-dd" style="display:none;position:absolute;z-index:60;left:0;right:0;top:100%;background:#fff;border:1.5px solid var(--g200);border-radius:10px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(28,25,23,.12)"></div></div>`;
+}
+function famPickerInit(root,excludePid){
+  root.querySelectorAll('input[id^="fam-"]').forEach(inp=>{
+    const dd=root.querySelector("#"+inp.id+"-dd");
+    if(!dd) return;
+    const render=q=>{
+      const cands=famCandidates(excludePid).filter(c=>!q||c.search.includes(q));
+      dd.innerHTML=cands.length?cands.slice(0,12).map(c=>
+        `<div class="fam-opt" data-uid="${c.uid}" style="padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px dashed var(--g200)">
+          <b>${c.label}</b> <span style="color:var(--g400);font-size:11px">${c.cin?"· CIN "+c.cin:""} ${c.login?"· "+c.login:""}</span></div>`).join("")
+        :'<div style="padding:10px 12px;font-size:12px;color:var(--g400)">Aucun compte patient trouvé</div>';
+      dd.style.display="block";
+      dd.querySelectorAll(".fam-opt").forEach(o=>{
+        o.onmousedown=e=>{e.preventDefault();
+          inp.value=o.querySelector("b").textContent; inp.dataset.uid=o.dataset.uid; dd.style.display="none";};
+      });
+    };
+    inp.addEventListener("focus",()=>render(inp.value.trim().toLowerCase()));
+    inp.addEventListener("input",()=>{inp.dataset.uid="";render(inp.value.trim().toLowerCase());});
+    inp.addEventListener("blur",()=>setTimeout(()=>dd.style.display="none",150));
+  });
+}
+function createFamilyLinks(pid, picks){
+  let n=0;
+  picks.forEach(({uid,relation})=>{
+    if(!uid) return;
+    if((DB.patient_links||[]).some(l=>l.userId===uid&&l.patientId===pid)) return;
+    const link={id:"pl"+Date.now()+Math.floor(Math.random()*1000),user_id:uid,userId:uid,patient_id:pid,patientId:pid,relation,actif:true};
+    if(!DB.patient_links) DB.patient_links=[];
+    DB.patient_links.push(link);
+    saveDB(DB,{table:"patient_links",rows:[link]});
+    n++;
+  });
+  return n;
+}
+
 function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
   const ov2=modal(`<div class="mb mb-lg"><div class="mh"><span class="mt2">Nouveau dossier patient</span><button onclick="this.closest('.mov').remove()" class="btn bs bsm">✕</button></div><div class="mbod">
     <div class="fr"><div class="fg"><label>Prénom <span style="color:var(--red)">*</span></label><input id="np-pr" value="${prePr}"/></div><div class="fg"><label>Nom <span style="color:var(--red)">*</span></label><input id="np-nm" value="${preNm}"/></div></div>
@@ -5881,7 +5928,11 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     <div class="fg"><label>Antécédents <span style="font-size:11px;color:var(--g400)">(optionnel — séparés par virgule)</span></label><input id="np-ant"/></div>
     <div class="fg"><label>Allergies <span style="font-size:11px;color:var(--g400)">(optionnel — séparés par virgule)</span></label><input id="np-alg"/></div>
     <div id="np-err" style="color:var(--red);font-size:12px;font-weight:700;margin-top:8px"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">👨‍👩‍👧 Compte famille — patients mineurs (optionnel)</div>
+    <div style="font-size:11px;color:var(--g400);margin-bottom:8px">Liez les comptes mobiles des parents : ils verront ce dossier depuis leur application.</div>
+    <div class="fr3">${famPickerHTML('fam-pere','Compte du père')}${famPickerHTML('fam-mere','Compte de la mère')}${famPickerHTML('fam-tuteur','Compte du tuteur')}</div>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="np-s">Créer le patient</button></div></div>`);
+  famPickerInit(ov2,null);
 
   // Médecin référent = créateur automatiquement
 
@@ -5924,6 +5975,12 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     const lieu=document.getElementById("np-lieu").value||"";
     const adr=document.getElementById("np-adr")?.value||"";
     const sx=document.getElementById("np-sx").value;
+    const _famPicks=[
+      {uid:(G("fam-pere")&&G("fam-pere").dataset.uid)||"",relation:"pere"},
+      {uid:(G("fam-mere")&&G("fam-mere").dataset.uid)||"",relation:"mere"},
+      {uid:(G("fam-tuteur")&&G("fam-tuteur").dataset.uid)||"",relation:"tuteur"}
+    ];
+    const _isMinorNew=dobVal?(Date.now()-new Date(dobVal).getTime())<216*30.44*86400000:false;
 
     showConsentModal(pr, nm, ()=>{
     const initials=(pr[0]+(nm[0]||"")).toUpperCase();
@@ -5954,6 +6011,7 @@ function showCreatePatientForm(prePr="",preNm="",preDob="",preCin=""){
     DB.access.push({id:uid(),patientId:pid,userId:currentUser.id,type:"createur",date:today(),modules:["all"]});
     if(drId&&drId!==currentUser.id) DB.access.push({id:uid(),patientId:pid,userId:drId,type:"medecin_ref",date:today(),modules:["all"]});
 
+    if(_isMinorNew){const _n=createFamilyLinks(pid,_famPicks); if(_n) toast(_n+" compte(s) parent(s) lié(s) ✓");}
     saveDB(DB);ov2.remove();
     if(currentPage==="admin")rAdmin();else rPatients();
     });
@@ -5978,7 +6036,26 @@ function showEditPatient(pid){
     <div class="fg"><label>Pathologies actives <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-path" value="${(p.pathologies||[]).join(", ")}"/></div>
     <div class="fg"><label>Allergies <span style="font-size:11px;color:var(--g400)">(optionnel)</span></label><input id="ep-alg" value="${(p.allergies||[]).join(", ")}"/></div>
     <div id="ep-err" style="color:var(--red);font-size:12px;font-weight:700;margin-top:8px"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">👨‍👩‍👧 Compte famille</div>
+    ${(()=>{const ai=ageInfoX(p.dob);const links=(DB.patient_links||[]).filter(l=>l.patientId===p.id);
+      let h="";
+      if(ai.months!==null&&ai.months>=216&&links.length)
+        h+=`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 11px;font-size:11.5px;margin-bottom:8px">🎂 ${p.prenom} est majeur(e) : l'accès des parents est <b>automatiquement suspendu</b>. Désactivez les liens pour solder la transition.</div>`;
+      h+=links.length?links.map(l=>{const u=DB.users.find(x=>x.id===l.userId);
+        const nm=u?(u.prenom+" "+u.nom):l.userId;
+        return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed var(--g200);font-size:12.5px">
+          <span>${l.relation==="mere"?"👩":l.relation==="tuteur"?"🧑‍⚖️":"👨"}</span>
+          <div style="flex:1"><b>${nm}</b> <span style="color:var(--g400);font-size:11px">· ${l.relation==="mere"?"Mère":l.relation==="pere"?"Père":"Tuteur"}${l.actif?"":" · <span style=\'color:#B4001A\'>désactivé</span>"}</span></div>
+          <button class="btn bs bsm" onclick="toggleLink('${l.id}',${!l.actif});this.closest('.mov').remove();showEditPatient('${p.id}')">${l.actif?"Désactiver":"Réactiver"}</button></div>`;}).join("")
+        :`<div style="font-size:12px;color:var(--g400);padding:4px 0">Aucun compte parent lié.</div>`;
+      return h;})()}
+    <div class="fr" style="align-items:flex-end;margin-top:8px">
+      ${famPickerHTML('fam-add','Ajouter un compte (nom, prénom, CIN)')}
+      <div class="fg" style="max-width:130px"><label>Relation</label><select id="fam-add-rel"><option value="pere">Père</option><option value="mere">Mère</option><option value="tuteur">Tuteur</option></select></div>
+      <button class="btn bs" style="margin-bottom:2px" onclick="addFamilyLinkFromEdit('${p.id}')">+ Lier</button>
+    </div>
   </div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="ep-s">Enregistrer</button></div></div>`);
+  famPickerInit(ov,p.id);
   ov.querySelector("#ep-s").onclick=()=>{
     const epErr=document.getElementById("ep-err");
     const epMissing=[];
