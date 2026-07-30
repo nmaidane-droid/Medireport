@@ -2839,8 +2839,8 @@ function dCarnet(){
     G("dossier-content").innerHTML=`
       <div style="font-size:15px;font-weight:800;margin-bottom:14px">📔 Compte famille — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div>
       <div class="card" style="margin-bottom:14px;border:1.5px solid #FDE68A;background:#FFFBEB">
-        <div style="font-size:13px;line-height:1.6">🎂 <b>${p.prenom} est désormais majeur(e).</b> Les comptes parents ci-dessous ont encore accès à son dossier.
-        Une fois son accès mobile personnel remis, désactivez les liens pour qu'il/elle soit seul(e) à consulter son dossier.</div>
+        <div style="font-size:13px;line-height:1.6">🎂 <b>${p.prenom} est désormais majeur(e).</b> L'accès des comptes parents à son dossier est <b>automatiquement suspendu depuis sa majorité</b> — les liens ci-dessous sont inactifs de fait.
+        Vous pouvez les désactiver définitivement pour solder la transition, et remettre à ${p.prenom} son accès mobile personnel.</div>
       </div>
       <div class="card"><div class="ctit"><span class="ci">👨‍👩‍👧</span> Comptes parents liés</div>${familyLinksHtml(p)}</div>`;
     return;
