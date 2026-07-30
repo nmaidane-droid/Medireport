@@ -2484,7 +2484,7 @@ function rDossier(){
   if(!p){G("pg-dossier").innerHTML=`<div style="padding:40px;text-align:center;color:var(--g400)">Sélectionnez un patient</div>`;return;}
   const u=currentUser;
   const canConsult=canAccessModule(u.id,p.id,"consultations");const canLabo=canAccessModule(u.id,p.id,"labo");const canImg=canAccessModule(u.id,p.id,"imagerie");const canRx=canAccessModule(u.id,p.id,"prescriptions")||u.role==="admin";const isAdmin=u.role==="admin";
-  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"vaccins",l:"Vaccination",i:"💉",show:true},{id:"carnet",l:"Carnet",i:"📔",show:isMinorPatient(p)},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
+  const tabs=[{id:"overview",l:"Synthèse",i:"📊",show:true},{id:"consultations",l:"Consultations",i:"🩺",show:canConsult},{id:"labo",l:"Laboratoire",i:"🧪",show:canLabo},{id:"imagerie",l:"Imagerie",i:"🔬",show:canImg},{id:"prescriptions",l:"Prescriptions",i:"💊",show:canRx},{id:"rdv",l:"Rendez-vous",i:"📅",show:true},{id:"vaccins",l:"Vaccination",i:"💉",show:true},{id:"carnet",l:"Carnet",i:"📔",show:isMinorPatient(p)||((DB.patient_links||[]).some(l=>l.patientId===p.id))},{id:"acces_pat",l:"Accès",i:"🔐",show:false}].filter(t=>t.show);
   const _uc=getUnseenCounts(p.id);const _vaxLate=buildVaxScheduleIdx(p).late.length;const tabsHtml=tabs.map(t=>{let n=_uc[{consultations:"el_consult",labo:"el_labo",imagerie:"el_img",prescriptions:"el_rx",rdv:"el_rdv"}[t.id]]||0;if(t.id==="vaccins")n=_vaxLate;return `<div class="dv-tab${dossierTab===t.id?" on":""}" data-tab="${t.id}" onclick="switchDossierTab('${t.id}')"><span class="dv-tab-ico">${t.i}</span>${t.l}${n?`<span class="tab-badge">${n}</span>`:""}</div>`;}).join("");
   const ref=DB.users.find(x=>x.id===p.medecin_ref);const titre=ref?.titre?ref.titre+" ":"";
   G("pg-dossier").innerHTML=`<div style="margin-bottom:12px"><button class="btn bs bsm" onclick="goPage('patients')">← Patients</button></div>
@@ -2518,27 +2518,26 @@ function ageInfoX(dob){
 }
 function isMinorPatient(p){ const a=ageInfoX(p&&p.dob); return a.months!==null && a.months<216; }
 
+// Référentiel aligné sur le calendrier PNI (sante.gov.ma) ; pneumocoque/rotavirus maintenus (à confirmer)
 const VAX_CHILD_X=[
-  {code:"bcg",m:0,nom:"BCG",dose:"Dose unique"},
-  {code:"hb",m:0,nom:"Hépatite B",dose:"Naissance"},
-  {code:"vpo",m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
-  {code:"penta",m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose"},
-  {code:"vpo",m:2,nom:"VPO (Polio orale)",dose:"1re dose"},
-  {code:"pneumo",m:2,nom:"Pneumocoque (PCV)",dose:"1re dose"},
-  {code:"rota",m:2,nom:"Rotavirus",dose:"1re dose"},
-  {code:"penta",m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose"},
-  {code:"vpo",m:3,nom:"VPO (Polio orale)",dose:"2e dose"},
-  {code:"pneumo",m:3,nom:"Pneumocoque (PCV)",dose:"2e dose"},
-  {code:"rota",m:3,nom:"Rotavirus",dose:"2e dose"},
-  {code:"penta",m:4,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose"},
-  {code:"vpo",m:4,nom:"VPO (Polio orale)",dose:"3e dose"},
-  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose"},
+  {code:"bcg",w:0,m:0,nom:"BCG",dose:"Dose unique"},
+  {code:"hb",w:0,m:0,nom:"Hépatite B (HVB1)",dose:"Naissance"},
+  {code:"vpo",w:0,m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
+  {code:"penta",w:6,m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose (6 semaines)"},
+  {code:"vpo",w:6,m:2,nom:"VPO (Polio orale)",dose:"1re dose (6 semaines)"},
+  {code:"pneumo",w:6,m:2,nom:"Pneumocoque (PCV)",dose:"1re dose (6 semaines)"},
+  {code:"rota",w:6,m:2,nom:"Rotavirus",dose:"1re dose (6 semaines)"},
+  {code:"penta",w:10,m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose (10 semaines)"},
+  {code:"vpo",w:10,m:2,nom:"VPO (Polio orale)",dose:"2e dose (10 semaines)"},
+  {code:"pneumo",w:10,m:2,nom:"Pneumocoque (PCV)",dose:"2e dose (10 semaines)"},
+  {code:"rota",w:10,m:2,nom:"Rotavirus",dose:"2e dose (10 semaines)"},
+  {code:"penta",w:14,m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose (14 semaines)"},
+  {code:"vpo",w:14,m:3,nom:"VPO (Polio orale)",dose:"3e dose (14 semaines)"},
+  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose (9 mois)"},
   {code:"pneumo",m:12,nom:"Pneumocoque (PCV)",dose:"Rappel 12 mois"},
-  {code:"rr",m:18,nom:"Rougeole-Rubéole (RR)",dose:"2e dose"},
-  {code:"dtc_r",m:18,nom:"DTC rappel",dose:"Rappel 18 mois"},
+  {code:"dtc_r",m:18,nom:"Rappel DTC-Polio",dose:"Rappel 18 mois"},
   {code:"vpo",m:18,nom:"VPO (Polio orale)",dose:"Rappel 18 mois"},
-  {code:"dtc_r",m:60,nom:"DTC rappel",dose:"Rappel 5 ans"},
-  {code:"vpo",m:60,nom:"VPO (Polio orale)",dose:"Rappel 5 ans"}
+  {code:"rr",m:72,nom:"Rougeole-Rubéole (RR)",dose:"2e dose (6 ans)"}
 ];
 const VAX_CATALOG=[
   {code:"bcg",nom:"BCG"},{code:"hb",nom:"Hépatite B"},{code:"vpo",nom:"VPO (Polio orale)"},
@@ -2560,7 +2559,7 @@ function buildVaxScheduleIdx(p){
     const seen={};
     VAX_CHILD_X.forEach(e=>{
       seen[e.code]=(seen[e.code]||0)+1;
-      const due=new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
+      const due=(e.w!==undefined)?new Date(birth.getTime()+e.w*7*86400000):new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
       if(countDone(e.code)>=seen[e.code]) return;
       const item={nom:e.nom,dose:e.dose,due,code:e.code};
       if(due<=now) res.late.push(item);
@@ -2835,6 +2834,17 @@ function printCarnetSante(pid){
 function dCarnet(){
   const p=DB.patients.find(x=>x.id===currentPatientId);
   const ai=ageInfoX(p.dob);
+  if(!isMinorPatient(p)){
+    // Patient majeur : le carnet n'affiche plus que la gestion des liens parents (bascule 18 ans)
+    G("dossier-content").innerHTML=`
+      <div style="font-size:15px;font-weight:800;margin-bottom:14px">📔 Compte famille — ${p.prenom} ${p.nom} <span style="font-weight:600;color:var(--g400);font-size:12.5px">· ${ai.label}</span></div>
+      <div class="card" style="margin-bottom:14px;border:1.5px solid #FDE68A;background:#FFFBEB">
+        <div style="font-size:13px;line-height:1.6">🎂 <b>${p.prenom} est désormais majeur(e).</b> Les comptes parents ci-dessous ont encore accès à son dossier.
+        Une fois son accès mobile personnel remis, désactivez les liens pour qu'il/elle soit seul(e) à consulter son dossier.</div>
+      </div>
+      <div class="card"><div class="ctit"><span class="ci">👨‍👩‍👧</span> Comptes parents liés</div>${familyLinksHtml(p)}</div>`;
+    return;
+  }
   const cons=sortByDate(DB.consultations[p.id]||[], 'date', true);
   const meas=[];
   cons.forEach(c=>{

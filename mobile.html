@@ -708,27 +708,26 @@ function ageInfo(dob){
 function isMinorP(p){ var a=ageInfo(p&&p.dob); return a.months!==null && a.months<216; }
 
 // Calendrier vaccinal marocain (référentiel indicatif — à valider médicalement)
+// Référentiel aligné sur le calendrier PNI (sante.gov.ma) ; pneumocoque/rotavirus maintenus (à confirmer)
 var VAX_CHILD=[
-  {code:"bcg",m:0,nom:"BCG",dose:"Dose unique"},
-  {code:"hb",m:0,nom:"Hépatite B",dose:"Naissance"},
-  {code:"vpo",m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
-  {code:"penta",m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose"},
-  {code:"vpo",m:2,nom:"VPO (Polio orale)",dose:"1re dose"},
-  {code:"pneumo",m:2,nom:"Pneumocoque (PCV)",dose:"1re dose"},
-  {code:"rota",m:2,nom:"Rotavirus",dose:"1re dose"},
-  {code:"penta",m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose"},
-  {code:"vpo",m:3,nom:"VPO (Polio orale)",dose:"2e dose"},
-  {code:"pneumo",m:3,nom:"Pneumocoque (PCV)",dose:"2e dose"},
-  {code:"rota",m:3,nom:"Rotavirus",dose:"2e dose"},
-  {code:"penta",m:4,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose"},
-  {code:"vpo",m:4,nom:"VPO (Polio orale)",dose:"3e dose"},
-  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose"},
+  {code:"bcg",w:0,m:0,nom:"BCG",dose:"Dose unique"},
+  {code:"hb",w:0,m:0,nom:"Hépatite B (HVB1)",dose:"Naissance"},
+  {code:"vpo",w:0,m:0,nom:"VPO (Polio orale)",dose:"Naissance (VPO-0)"},
+  {code:"penta",w:6,m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"1re dose (6 semaines)"},
+  {code:"vpo",w:6,m:2,nom:"VPO (Polio orale)",dose:"1re dose (6 semaines)"},
+  {code:"pneumo",w:6,m:2,nom:"Pneumocoque (PCV)",dose:"1re dose (6 semaines)"},
+  {code:"rota",w:6,m:2,nom:"Rotavirus",dose:"1re dose (6 semaines)"},
+  {code:"penta",w:10,m:2,nom:"Pentavalent (DTC-Hib-HB)",dose:"2e dose (10 semaines)"},
+  {code:"vpo",w:10,m:2,nom:"VPO (Polio orale)",dose:"2e dose (10 semaines)"},
+  {code:"pneumo",w:10,m:2,nom:"Pneumocoque (PCV)",dose:"2e dose (10 semaines)"},
+  {code:"rota",w:10,m:2,nom:"Rotavirus",dose:"2e dose (10 semaines)"},
+  {code:"penta",w:14,m:3,nom:"Pentavalent (DTC-Hib-HB)",dose:"3e dose (14 semaines)"},
+  {code:"vpo",w:14,m:3,nom:"VPO (Polio orale)",dose:"3e dose (14 semaines)"},
+  {code:"rr",m:9,nom:"Rougeole-Rubéole (RR)",dose:"1re dose (9 mois)"},
   {code:"pneumo",m:12,nom:"Pneumocoque (PCV)",dose:"Rappel 12 mois"},
-  {code:"rr",m:18,nom:"Rougeole-Rubéole (RR)",dose:"2e dose"},
-  {code:"dtc_r",m:18,nom:"DTC rappel",dose:"Rappel 18 mois"},
+  {code:"dtc_r",m:18,nom:"Rappel DTC-Polio",dose:"Rappel 18 mois"},
   {code:"vpo",m:18,nom:"VPO (Polio orale)",dose:"Rappel 18 mois"},
-  {code:"dtc_r",m:60,nom:"DTC rappel",dose:"Rappel 5 ans"},
-  {code:"vpo",m:60,nom:"VPO (Polio orale)",dose:"Rappel 5 ans"}
+  {code:"rr",m:72,nom:"Rougeole-Rubéole (RR)",dose:"2e dose (6 ans)"}
 ];
 
 function buildVaxSchedule(p){
@@ -746,7 +745,7 @@ function buildVaxSchedule(p){
     VAX_CHILD.forEach(function(e){
       seen[e.code]=(seen[e.code]||0)+1;
       var idx=seen[e.code]; // n-ième occurrence de ce code
-      var due=new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
+      var due=(e.w!==undefined)?new Date(birth.getTime()+e.w*7*86400000):new Date(birth.getFullYear(),birth.getMonth()+e.m,birth.getDate());
       if(countDone(e.code)>=idx) return; // déjà fait
       var item={nom:e.nom,dose:e.dose,due:due,code:e.code};
       if(due<=now) res.late.push(item);
