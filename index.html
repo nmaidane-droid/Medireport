@@ -727,7 +727,9 @@ async function supaFetch(path, opts){
       path: path,
       method: opts?.method || "GET",
       body: opts?.body,
-      prefer: opts?.prefer
+      prefer: opts?.prefer,
+      erasureMotif: opts?.erasureMotif,
+      erasureLabel: opts?.erasureLabel
     })
   });
   if(res.status === 401){
@@ -5755,15 +5757,19 @@ function showEffacement(){
     const motif=document.getElementById("eff-motif").value;
     if(!pid){toast("Sélectionnez un patient","warning");return;}
     if(!await confirmBox("Toutes les données médicales de ce patient seront définitivement supprimées de la base. Action irréversible (CNDP).", {title:"Suppression définitive ?", icon:"⚠️", okLabel:"Effacer définitivement", danger:true})) return;
+    // Effacement transmis au serveur avec le motif (le serveur journalise dans audit_log)
     DB.patients=DB.patients.filter(p=>p.id!==pid);
-    delete DB.consultations[pid]; delete DB.labos[pid]; delete DB.rx[pid]; delete DB.imagerie[pid];
+    delete DB.consultations[pid]; delete DB.labos[pid]; delete DB.rx[pid]; delete DB.imagerie[pid]; delete DB.vaccins[pid];
     DB.access=DB.access.filter(a=>a.patientId!==pid);
     DB.rdv=(DB.rdv||[]).filter(r=>r.patientId!==pid);
-    ["consultations","labos","prescriptions","imagerie","patient_access","rdv"].forEach(t=>supaFetch(t+"?patient_id=eq."+pid,{method:"DELETE"}));
-    supaFetch("patients?id=eq."+pid,{method:"DELETE"});
+    DB.patient_links=(DB.patient_links||[]).filter(l=>l.patientId!==pid);
+    // Purge complète de toutes les tables liées au patient (y compris vaccins, liens famille, comptes mobile)
+    ["consultations","labos","prescriptions","imagerie","patient_access","rdv","vaccins","patient_links","seen_items"].forEach(t=>supaFetch(t+"?patient_id=eq."+pid,{method:"DELETE"}));
+    supaFetch("users?patient_id=eq."+pid,{method:"DELETE"});
+    supaFetch("patients?id=eq."+pid,{method:"DELETE",erasureMotif:_xssClean(motif||""),erasureLabel:_xssClean(_effNom)});
     saveDB(DB);
     ov.remove();
-    toast("Données du patient supprimées","success");
+    toast("Patient effacé définitivement (traçé CNDP) ✓","success");
   };
 }
 
