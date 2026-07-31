@@ -208,13 +208,17 @@ export default async function handler(req) {
   if (method !== 'GET' && res.ok && table !== 'audit_log' && SENSITIVE.includes(table)) {
     try {
       const tbl0 = effectivePath.split('?')[0];
+      const isErasure = table === 'patients' && method === 'DELETE';
+      const entry = {
+        ts: Date.now(), user_id: session.u, role,
+        action: isErasure ? 'EFFACEMENT_CNDP' : method, table_name: tbl0,
+        target: (effectivePath.match(/[?&](?:id|patient_id)=eq\.([^&]+)/) || [])[1] || null
+      };
+      if (isErasure) { entry.motif = body.erasureMotif || null; entry.patient_label = body.erasureLabel || null; }
       await fetch(SB_URL + '/rest/v1/audit_log', {
         method: 'POST',
         headers: { apikey: SRK, Authorization: 'Bearer ' + SRK, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ts: Date.now(), user_id: session.u, role, action: method, table_name: tbl0,
-          target: (effectivePath.match(/[?&](?:id|patient_id)=eq\.([^&]+)/) || [])[1] || null
-        })
+        body: JSON.stringify(entry)
       });
     } catch { /* le log ne doit jamais bloquer l'opération métier */ }
   }
