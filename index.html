@@ -5418,7 +5418,7 @@ function rUsers(search=""){
       <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
       <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
       <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">••••••</span></td>
-      <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
+      <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button><button class="btn bs bsm" onclick="revokeSessions('${u.id}')" title="Déconnecter tous les appareils">🔒</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
     </tr>`;
   }).join("");
   G("pg-users").innerHTML=`${backBtn()}<div class="sec-hd"><div><div class="sec-tit">Utilisateurs (${filtered.length})</div></div><button class="btn bp" onclick="showAddUser()">+ Nouvel utilisateur</button></div>
@@ -5727,7 +5727,7 @@ function rAdminUsers(search){
       <td><span class="badge" style="background:${rc.c}22;color:${rc.c}">${rc.i} ${rc.l}</span></td>
       <td style="font-size:13px;font-family:monospace">${u.login||"—"}</td>
       <td><span style="font-size:15px;font-weight:900;letter-spacing:4px;color:var(--g600);font-family:monospace">••••••</span></td>
-      <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
+      <td><div class="tbl-act"><button class="btn bs bsm" onclick="showEditUser('${u.id}')">✏️</button><button class="btn bs bsm" onclick="revokeSessions('${u.id}')" title="Déconnecter tous les appareils">🔒</button>${u.id!=="u1"?`<button class="btn bd bsm" onclick="delUser('${u.id}')">🗑</button>`:""}</div></td>
     </tr>`;
   }).join("");
   G("pg-admin-users").innerHTML=`
