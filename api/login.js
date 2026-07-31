@@ -78,7 +78,7 @@ export default async function handler(req) {
   // ── Admin hardcodé ──
   if (login === ADMIN_LOGIN) {
     const h = await sha256hex(pin);
-    if (h !== ADMIN_PIN_HASH) { await bumpAttempts(login, true); return json({ error: 'Code PIN incorrect' }, 401); }
+    if (h !== ADMIN_PIN_HASH) { await bumpAttempts(login, true); return json({ error: 'Identifiant ou code PIN incorrect' }, 401); }
     await bumpAttempts(login, false);
     const token = await signToken({ u: ADMIN_USER.id, r: 'admin', e: Date.now() + TOKEN_TTL_MS }, SRK);
     return json({ token, user: ADMIN_USER });
@@ -91,14 +91,14 @@ export default async function handler(req) {
   if (!res.ok) return json({ error: 'Service indisponible' }, 502);
   const rows = await res.json();
   const user = rows && rows[0];
-  if (!user) return json({ error: 'Identifiant inconnu' }, 401);
+  if (!user) { await bumpAttempts(login, true); return json({ error: 'Identifiant ou code PIN incorrect' }, 401); }
 
   // Comparaison PIN : HMAC salé (nouveau) OU sha256 (ancien) OU clair (legacy) — migration douce
   const pinHmacVal = await pinHmac(pin, login, SRK);
   const pinSha = await sha256hex(pin);
   const stored = String(user.pin || '');
   const ok = stored === pinHmacVal || stored === pinSha || stored === pin;
-  if (!ok) { await bumpAttempts(login, true); return json({ error: 'Code PIN incorrect' }, 401); }
+  if (!ok) { await bumpAttempts(login, true); return json({ error: 'Identifiant ou code PIN incorrect' }, 401); }
   await bumpAttempts(login, false);
 
   // Ré-encodage transparent : si le PIN était en clair ou en SHA-256, on le migre en HMAC salé
