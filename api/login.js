@@ -15,6 +15,14 @@ async function sha256hex(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Hash PIN salé : HMAC-SHA256(pin, secret_serveur) — non pré-calculable sans le secret
+async function pinHmac(pin, login, secret) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret + '|pin|' + login),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function signToken(payload, secret) {
   const data = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
@@ -36,10 +44,42 @@ export default async function handler(req) {
   const pin = (body.pin || '').trim();
   if (!login || !pin) return json({ error: 'Identifiant ou PIN manquant' }, 400);
 
+  // ── Rate limiting : verrouillage après 5 échecs, fenêtre 15 min ──
+  const MAX_TRIES = 5, LOCK_MS = 15 * 60 * 1000;
+  const nowTs = Date.now();
+  async function readAttempts(l) {
+    try {
+      const r = await fetch(SB_URL + '/rest/v1/login_attempts?login=eq.' + encodeURIComponent(l) + '&select=*', {
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK }
+      });
+      if (r.ok) { const a = await r.json(); return a && a[0]; }
+    } catch {}
+    return null;
+  }
+  async function bumpAttempts(l, fail) {
+    const cur = await readAttempts(l);
+    const body2 = fail
+      ? { login: l, fails: ((cur && cur.fails) || 0) + 1, last_fail: nowTs }
+      : { login: l, fails: 0, last_fail: nowTs };
+    try {
+      await fetch(SB_URL + '/rest/v1/login_attempts', {
+        method: 'POST',
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify(body2)
+      });
+    } catch {}
+  }
+  const att = await readAttempts(login);
+  if (att && att.fails >= MAX_TRIES && (nowTs - (att.last_fail || 0)) < LOCK_MS) {
+    const wait = Math.ceil((LOCK_MS - (nowTs - att.last_fail)) / 60000);
+    return json({ error: 'Trop de tentatives. Réessayez dans ' + wait + ' min.' }, 429);
+  }
+
   // ── Admin hardcodé ──
   if (login === ADMIN_LOGIN) {
     const h = await sha256hex(pin);
-    if (h !== ADMIN_PIN_HASH) return json({ error: 'Code PIN incorrect' }, 401);
+    if (h !== ADMIN_PIN_HASH) { await bumpAttempts(login, true); return json({ error: 'Code PIN incorrect' }, 401); }
+    await bumpAttempts(login, false);
     const token = await signToken({ u: ADMIN_USER.id, r: 'admin', e: Date.now() + TOKEN_TTL_MS }, SRK);
     return json({ token, user: ADMIN_USER });
   }
@@ -53,11 +93,24 @@ export default async function handler(req) {
   const user = rows && rows[0];
   if (!user) return json({ error: 'Identifiant inconnu' }, 401);
 
-  // Comparaison PIN : accepte en clair (transition) ou hashé SHA-256
-  const pinHash = await sha256hex(pin);
+  // Comparaison PIN : HMAC salé (nouveau) OU sha256 (ancien) OU clair (legacy) — migration douce
+  const pinHmacVal = await pinHmac(pin, login, SRK);
+  const pinSha = await sha256hex(pin);
   const stored = String(user.pin || '');
-  const ok = stored === pin || stored === pinHash;
-  if (!ok) return json({ error: 'Code PIN incorrect' }, 401);
+  const ok = stored === pinHmacVal || stored === pinSha || stored === pin;
+  if (!ok) { await bumpAttempts(login, true); return json({ error: 'Code PIN incorrect' }, 401); }
+  await bumpAttempts(login, false);
+
+  // Ré-encodage transparent : si le PIN était en clair ou en SHA-256, on le migre en HMAC salé
+  if (stored !== pinHmacVal) {
+    try {
+      await fetch(SB_URL + '/rest/v1/users?id=eq.' + encodeURIComponent(user.id), {
+        method: 'PATCH',
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinHmacVal })
+      });
+    } catch {}
+  }
 
   const { pin: _omit, ...safeUser } = user;
   safeUser.patientId = user.patient_id || null;

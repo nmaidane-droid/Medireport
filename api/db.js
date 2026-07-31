@@ -6,7 +6,7 @@ const SB_URL = 'https://sfpjcqhaunkicllzvoba.supabase.co';
 const TABLES = new Set([
   'users', 'patients', 'patient_access', 'consultations', 'labos', 'prescriptions',
   'imagerie', 'rdv', 'demandes_labo', 'demandes_avis', 'demandes_acces',
-  'seen_items', 'notifications_vues', 'backups', 'vaccins', 'patient_links'
+  'seen_items', 'notifications_vues', 'backups', 'vaccins', 'patient_links', 'audit_log'
 ]);
 
 function b64urlToBytes(s) {
@@ -190,6 +190,11 @@ export default async function handler(req) {
   if (body.prefer) headers.Prefer = body.prefer;
   else if (method !== 'GET') headers.Prefer = 'return=representation';
 
+  // audit_log : lecture réservée admin, écriture directe interdite (seul le serveur y écrit)
+  if (table === 'audit_log') {
+    if (method !== 'GET' || role !== 'admin') return json({ error: 'Accès refusé' }, 403);
+  }
+
   const res = await fetch(SB_URL + '/rest/v1/' + effectivePath, {
     method,
     headers,
@@ -197,6 +202,22 @@ export default async function handler(req) {
   });
 
   const text = await res.text();
+
+  // ── Journal d'audit serveur : écritures sensibles réussies (infalsifiable côté client) ──
+  const SENSITIVE = ['patients','consultations','labos','prescriptions','imagerie','vaccins','patient_links','patient_access','users'];
+  if (method !== 'GET' && res.ok && table !== 'audit_log' && SENSITIVE.includes(table)) {
+    try {
+      const tbl0 = effectivePath.split('?')[0];
+      await fetch(SB_URL + '/rest/v1/audit_log', {
+        method: 'POST',
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ts: Date.now(), user_id: session.u, role, action: method, table_name: tbl0,
+          target: (effectivePath.match(/[?&](?:id|patient_id)=eq\.([^&]+)/) || [])[1] || null
+        })
+      });
+    } catch { /* le log ne doit jamais bloquer l'opération métier */ }
+  }
 
   // ── Filtrage : masquer les PINs sauf pour l'admin ──
   if (table === 'users' && method === 'GET' && role !== 'admin' && text) {
