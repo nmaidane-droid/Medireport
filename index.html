@@ -1327,6 +1327,19 @@ function buildLogin(){
   // Static HTML — nothing to build
 }
 
+function promptTotp(){
+  return new Promise(resolve=>{
+    const ov=document.createElement("div");
+    ov.className="mov"; ov.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px";
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:24px;max-width:340px;width:100%;text-align:center"><div style="font-size:15px;font-weight:800;margin-bottom:6px">🔐 Authentification à deux facteurs</div><div style="font-size:12.5px;color:var(--g500);margin-bottom:14px">Saisissez le code à 6 chiffres de votre application d\'authentification.</div><input id="totp-inp" inputmode="numeric" maxlength="6" placeholder="000000" style="width:100%;text-align:center;font-size:22px;letter-spacing:8px;font-weight:800;padding:12px;border:1.5px solid var(--g200);border-radius:10px;margin-bottom:14px"/><div style="display:flex;gap:8px"><button id="totp-cancel" class="btn bs" style="flex:1">Annuler</button><button id="totp-ok" class="btn bp" style="flex:1">Valider</button></div></div>';
+    document.body.appendChild(ov);
+    const inp=ov.querySelector("#totp-inp"); inp.focus();
+    const done=v=>{ov.remove();resolve(v);};
+    ov.querySelector("#totp-ok").onclick=()=>done(inp.value.trim());
+    ov.querySelector("#totp-cancel").onclick=()=>done(null);
+    inp.onkeydown=e=>{if(e.key==="Enter")done(inp.value.trim());};
+  });
+}
 function doLogin(){
   const loginVal=(document.getElementById("ls-login-inp")?.value||"").trim().toLowerCase();
   const errEl=document.getElementById("ls-pin-err");
@@ -1358,7 +1371,17 @@ function doLogin(){
     body: JSON.stringify({ login: loginVal, pin: lsPinEntry })
   }).then(async res => {
     const data = await res.json().catch(()=>({}));
-    if(!res.ok){ pinErr(data.error || "Échec de connexion"); return; }
+    if(!res.ok){
+      if(data.error==="mfa_required"){
+        const code=await promptTotp();
+        if(!code){ pinErr("Authentification à deux facteurs requise"); return; }
+        const res2=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({login:loginVal,pin:lsPinEntry,totp:code})});
+        const data2=await res2.json().catch(()=>({}));
+        if(!res2.ok){ pinErr(data2.error==="mfa_required"?"Code requis":(data2.error||"Échec")); return; }
+        Object.assign(data,data2);
+      } else { pinErr(data.error || "Échec de connexion"); return; }
+    }
 
     // ✅ Authentifié
     lsPinEntry="";
@@ -2608,7 +2631,7 @@ function dVaccins(){
       <span style="font-size:18px">✅</span><div style="flex:1;min-width:0">
       <div style="font-size:13.5px;font-weight:700">${v.nom}</div>
       <div style="font-size:11.5px;color:var(--g400)">${v.dose||""} · ${v.date||""}${v.lot?" · Lot "+v.lot:""}${drN?" · "+drN:""}</div></div>
-      ${canWrite?`<button class="btn bs bsm" onclick="delVaccin('${v.id}')" title="Supprimer">✕</button>`:""}</div>`;
+</div>`;
   };
   G("dossier-content").innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -5438,6 +5461,15 @@ function showEditUser(uid2){
 </div></div><div class="mf"><button class="btn bs" onclick="this.closest('.mov').remove()">Annuler</button><button class="btn bp" id="eu-s">Enregistrer</button></div></div>`);
   ov.querySelector("#eu-s").onclick=async ()=>{u.prenom=G("eu-pr").value||u.prenom;u.nom=G("eu-nm").value||u.nom;u.spec=G("eu-sp").value;u.structure=G("eu-st").value;u.initials=(u.prenom[0]+(u.nom[0]||"")).toUpperCase();const newPin=G("eu-pin").value.trim();if(newPin){u.pin=await _hashPin(newPin);toast("Nouveau PIN : "+newPin+" — notez-le, il ne sera plus affiché","info");}saveDB(DB,{table:"users",rows:[u]});ov.remove();rUsers();};
 }
+async function revokeSessions(uid2){
+  const u=DB.users.find(x=>x.id===uid2);
+  if(!await confirmBox((u?u.prenom+" "+u.nom:"Cet utilisateur")+" sera déconnecté de tous ses appareils. Il devra se reconnecter.", {title:"Déconnecter tous les appareils ?", icon:"🔒", okLabel:"Déconnecter", danger:false})) return;
+  const cur=(u&&u.session_version)||0;
+  if(u) u.session_version=cur+1;
+  try{ await supaFetch("users?id=eq."+uid2,{method:"PATCH",body:JSON.stringify({session_version:cur+1}),prefer:"return=minimal"}); }catch(e){}
+  saveDB(DB);
+  toast("Sessions révoquées ✓ — reconnexion requise","success");
+}
 async function delUser(uid2){const u=DB.users.find(x=>x.id===uid2);if(!await confirmBox(`${u?u.prenom+" "+u.nom:"Cet utilisateur"} perdra définitivement son accès à MediReport.`, {title:"Supprimer l'utilisateur ?", icon:"🗑", okLabel:"Supprimer", danger:true}))return;DB.users=DB.users.filter(x=>x.id!==uid2);DB.access=DB.access.filter(a=>a.userId!==uid2);saveDB(DB);rUsers();toast("Utilisateur supprimé","success");}
 
 function rAcces(){const patients=DB.patients;const profs=DB.users.filter(u=>!["patient","admin"].includes(u.role));const matrixHead=`<div style="display:grid;grid-template-columns:160px ${profs.map(()=>"1fr").join(" ")};background:var(--g50);border-bottom:2px solid var(--g200)"><div style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase">Patient</div>${profs.map(u=>`<div style="padding:10px 4px;font-size:9px;font-weight:700;color:var(--g500);text-transform:uppercase;text-align:center">${u.initials}<br/><span style="font-weight:400;text-transform:none">${u.nom}</span></div>`).join("")}</div>`;const matrixRows=patients.map(p=>`<div style="display:grid;grid-template-columns:160px ${profs.map(()=>"1fr").join(" ")};border-bottom:1px solid var(--g100)"><div style="padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px" onclick="openDossier('${p.id}')">${p.prenom} ${p.nom}</div>${profs.map(u=>{const acc=DB.access.find(a=>a.patientId===p.id&&a.userId===u.id);return `<div style="padding:10px 4px;text-align:center;font-size:16px">${acc?(acc.type==="medecin_ref"?"🔵":acc.type==="orientation"?"🟢":"🟡"):"—"}</div>`;}).join("")}</div>`).join("");G("pg-acces").innerHTML=`<div class="sec-hd"><div><div class="sec-tit">Matrice des accès</div><div class="sec-sub">Vue globale des habilitations</div></div></div><div style="margin-bottom:12px;font-size:12px;color:var(--g500);display:flex;gap:16px">🔵 Médecin référent &nbsp; 🟢 Orientation &nbsp; 🟡 Prescription</div><div style="border:1px solid var(--g200);border-radius:var(--rL);overflow:auto;margin-bottom:20px">${matrixHead}${matrixRows}</div><div class="sec-hd"><div><div class="sec-tit">Tous les accès (${DB.access.length})</div></div></div><div class="card"><table class="tbl"><thead><tr><th>Patient</th><th>Professionnel</th><th>Type</th><th>Modules</th><th>Depuis</th><th>Expiration</th><th>Action</th></tr></thead><tbody>${DB.access.map(a=>{const p=DB.patients.find(x=>x.id===a.patientId);const u=DB.users.find(x=>x.id===a.userId);return `<tr><td style="font-weight:700">${p?p.prenom+" "+p.nom:"—"}</td><td>${u?u.prenom+" "+u.nom:"—"}</td><td>${bdg({medecin_ref:"Médecin réf.",orientation:"Orientation",prescription:"Prescription",consentement:"Consentement"}[a.type]||a.type,a.type==="medecin_ref"?"bb":"bgn")}</td><td style="font-size:12px;color:var(--g500)">${a.modules.includes("all")?"Complet":a.modules.join(", ")}</td><td style="font-size:12px;color:var(--g400)">${a.date||"—"}</td><td style="font-size:12px;color:var(--g400)">${a.expiry||"Permanent"}</td><td><button class="btn bd bsm" onclick="delAccess2('${a.id}')">Révoquer</button></td></tr>`;}).join("")}</tbody></table></div>`;}
@@ -7942,9 +7974,10 @@ th{background:#F1F5F9;padding:10px 14px;font-size:11px;font-weight:700;color:#64
   win.document.close();
 }
 
-// ── Supprimer un patient (créateur uniquement) ────────────
+// ── Suppression d'un patient : ADMINISTRATEUR uniquement, via effacement CNDP tracé ──
 async function delPatient(pid){
-  if(!await confirmBox("Le patient et l'intégralité de son dossier médical seront définitivement supprimés.", {title:"Supprimer ce patient ?", icon:"🗑", okLabel:"Supprimer", danger:true})) return;
+  if(currentUser.role!=="admin"){toast("Seul l'administrateur peut effacer un patient (droit à l'effacement, tracé CNDP).","warning");return;}
+  if(!await confirmBox("Le patient et l'intégralité de son dossier médical seront définitivement supprimés. Action irréversible et tracée (CNDP).", {title:"Effacer ce patient ?", icon:"⚠️", okLabel:"Effacer définitivement", danger:true})) return;
   DB.patients = DB.patients.filter(p=>p.id!==pid);
   DB.access = DB.access.filter(a=>a.patientId!==pid);
   DB.users = DB.users.filter(u=>u.patientId!==pid);
@@ -7954,14 +7987,12 @@ async function delPatient(pid){
   delete DB.imagerie[pid];
   DB.rdv = DB.rdv.filter(r=>r.patientId!==pid);
   saveDB(DB);
-  // Supprimer dans Supabase
-  supaFetch("patients?id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  const _lbl=(DB.patients.find(p=>p.id===pid)||{});
+  // Purge complète (toutes tables liées)
+  ["consultations","labos","prescriptions","imagerie","patient_access","rdv","vaccins","patient_links","seen_items"].forEach(t=>supaFetch(t+"?patient_id=eq."+pid,{method:"DELETE",prefer:"return=minimal"}));
   supaFetch("users?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
-  supaFetch("patient_access?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
-  supaFetch("prescriptions?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
-  supaFetch("consultations?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
-  supaFetch("labos?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
-  supaFetch("rdv?patient_id=eq."+pid, {method:"DELETE", prefer:"return=minimal"});
+  supaFetch("patients?id=eq."+pid, {method:"DELETE", erasureMotif:"Suppression administrateur", erasureLabel:_xssClean((_lbl.prenom||"")+" "+(_lbl.nom||""))});
+  toast("Patient effacé (tracé CNDP) ✓","success");
   rPatients();
 }
 </script>
