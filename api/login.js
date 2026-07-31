@@ -114,7 +114,7 @@ export default async function handler(req) {
 
   const { pin: _omit, ...safeUser } = user;
   safeUser.patientId = user.patient_id || null;
-  const payload = { u: user.id, r: user.role, e: Date.now() + TOKEN_TTL_MS };
+  const payload = { u: user.id, r: user.role, e: Date.now() + TOKEN_TTL_MS, sv: (user.session_version || 0) };
   if (user.role === 'patient' && user.patient_id) payload.p = user.patient_id;
 
   // ── Compte famille : dossiers liés (enfants) ──

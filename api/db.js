@@ -42,6 +42,21 @@ export default async function handler(req) {
   const session = await verifyToken(req.headers.get('x-session'), SRK);
   if (!session) return json({ error: 'Session invalide ou expirée' }, 401);
 
+  // ── Révocation : le token doit porter la version de session courante de l'utilisateur ──
+  // (incrémenter users.session_version invalide instantanément tous les tokens émis avant.)
+  if (session.u && session.u !== 'u_admin') {
+    try {
+      const vr = await fetch(SB_URL + '/rest/v1/users?id=eq.' + encodeURIComponent(session.u) + '&select=session_version', {
+        headers: { apikey: SRK, Authorization: 'Bearer ' + SRK }
+      });
+      if (vr.ok) {
+        const u = await vr.json();
+        const cur = (u && u[0] && u[0].session_version) || 0;
+        if ((session.sv || 0) !== cur) return json({ error: 'Session révoquée' }, 401);
+      }
+    } catch { /* en cas d'échec réseau, on ne bloque pas (dégradation gracieuse) */ }
+  }
+
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
 
@@ -53,6 +68,19 @@ export default async function handler(req) {
   if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return json({ error: 'Méthode non autorisée' }, 403);
 
   const role = session.r;
+
+  // ── Règle "on n'efface rien" : DELETE sur données cliniques réservé à l'admin (effacement CNDP) ──
+  // Tables cliniques légales : jamais supprimables ligne à ligne par un soignant.
+  // Seul l'admin peut effacer (dans le cadre du droit à l'effacement d'un patient entier).
+  {
+    const _tbl = String(body.path || '').split('?')[0];
+    const _method = body.method || 'GET';
+    const CLINICAL = ['consultations','labos','imagerie','prescriptions','vaccins'];
+    if (_method === 'DELETE' && CLINICAL.includes(_tbl) && role !== 'admin') {
+      return json({ error: "Suppression interdite : donnée médicale légale. Corrigez par un ajout." }, 403);
+    }
+    // rdv : suppression autorisée aux soignants (annulation de rendez-vous) — pas une donnée clinique figée
+  }
   let effectivePath = path;
 
   // ── Règles d'accès par rôle ──
