@@ -23,6 +23,44 @@ async function pinHmac(pin, login, secret) {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ── TOTP (RFC 6238) : HMAC-SHA1, pas de 30 s, 6 chiffres ──
+function base32Decode(s) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  s = String(s).toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0, val = 0; const out = [];
+  for (const ch of s) {
+    const idx = A.indexOf(ch);
+    if (idx < 0) continue;
+    val = (val << 5) | idx; bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return new Uint8Array(out);
+}
+
+async function totpAt(secretBytes, counter) {
+  const buf = new ArrayBuffer(8); const dv = new DataView(buf);
+  dv.setUint32(0, Math.floor(counter / 4294967296));
+  dv.setUint32(4, counter >>> 0);
+  const key = await crypto.subtle.importKey('raw', secretBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf));
+  const off = sig[sig.length - 1] & 0x0f;
+  const bin = ((sig[off] & 0x7f) << 24) | (sig[off + 1] << 16) | (sig[off + 2] << 8) | sig[off + 3];
+  return String(bin % 1000000).padStart(6, '0');
+}
+
+// Tolérance ±1 fenêtre (30 s) pour absorber la dérive d'horloge du téléphone
+async function verifyTotp(secret, code) {
+  const clean = String(code || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(clean)) return false;
+  const bytes = base32Decode(secret);
+  if (!bytes.length) return false;
+  const ctr = Math.floor(Date.now() / 30000);
+  for (let w = -1; w <= 1; w++) {
+    if (await totpAt(bytes, ctr + w) === clean) return true;
+  }
+  return false;
+}
+
 async function signToken(payload, secret) {
   const data = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
@@ -79,6 +117,18 @@ export default async function handler(req) {
   if (login === ADMIN_LOGIN) {
     const h = await sha256hex(pin);
     if (h !== ADMIN_PIN_HASH) { await bumpAttempts(login, true); return json({ error: 'Identifiant ou code PIN incorrect' }, 401); }
+
+    // ── 2e facteur (TOTP) ── actif uniquement si MEDIREPORT_TOTP_SECRET est défini.
+    // Variable absente = MFA désactivé (procédure de secours en cas de perte du téléphone).
+    const TOTP_SECRET = process.env.MEDIREPORT_TOTP_SECRET;
+    if (TOTP_SECRET) {
+      const code = String(body.totp || '').trim();
+      // PIN correct mais code absent : on réclame le 2e facteur sans incrémenter le compteur
+      if (!code) return json({ error: 'mfa_required' }, 401);
+      const okTotp = await verifyTotp(TOTP_SECRET, code);
+      if (!okTotp) { await bumpAttempts(login, true); return json({ error: 'Code à deux facteurs incorrect' }, 401); }
+    }
+
     await bumpAttempts(login, false);
     const token = await signToken({ u: ADMIN_USER.id, r: 'admin', e: Date.now() + TOKEN_TTL_MS }, SRK);
     return json({ token, user: ADMIN_USER });
